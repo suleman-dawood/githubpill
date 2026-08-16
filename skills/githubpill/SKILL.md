@@ -1,12 +1,12 @@
 ---
 name: githubpill
-description: Validate whether a project idea already exists on GitHub before you build it. Use when the user describes a project idea and asks if it already exists, says "validate my idea", "is there already a tool that does X", "does this exist on github", "prior art check", or invokes /githubpill. Returns a 🟢/🟡/🔴 verdict in ~90 seconds using gh api metadata only; deep-search opt-in extension clones top candidates and judges equivalence with file-path evidence (~10 min).
+description: Validate whether a project idea already exists on GitHub before you build it. Use when the user describes a project idea and asks if it already exists, says "validate my idea", "is there already a tool that does X", "does this exist on github", "prior art check", or invokes the skill command (/githubpill in Claude Code, /skill:githubpill in pi). Returns a 🟢/🟡/🔴 verdict in ~90 seconds using gh api metadata only; deep-search opt-in extension clones top candidates and judges equivalence with file-path evidence (~10 min).
 allowed-tools: Bash, Read, WebSearch, Write
 ---
 
 # GithubPill First-Search Protocol (≤10 gh api calls, ≤90s)
 
-Run on `/githubpill <idea>` or matching trigger. Return a 🟢/🟡/🔴 verdict +
+Run on the skill command (Claude Code: `/githubpill <idea>`; pi: `/skill:githubpill <idea>`) or matching trigger. Return a 🟢/🟡/🔴 verdict +
 Markdown report with mechanically derived per-axis scores, ≤90s, `gh api`
 metadata only.
 
@@ -26,13 +26,13 @@ the skill activated.
 >
 > **HARD RULE — no archetype collapsing in multi-idea runs.** When N ideas are
 > passed in one invocation, the protocol MUST run the full 5-archetype
-> WebSearch cross-check (per `references/web-cross-check.md`) **independently
-> for every idea** — total = 5×N WebSearch calls. Do NOT collapse to "one
-> WebSearch per idea" to save quota or turn-time; doing so silently bypasses
+> web-search cross-check (per `references/web-cross-check.md`) **independently
+> for every idea** — total = 5×N web-search calls. Do NOT collapse to "one
+> web-search per idea" to save quota or turn-time; doing so silently bypasses
 > the SaaS-competitor archetype and produces false-🟢 verdicts on
 > SaaS-saturated lanes. The 2026-05-27 Corust miss happened because of
 > exactly this shortcut: 5 ideas × 1 query each instead of 5 ideas × 5
-> archetype queries. If 5×N exceeds the session WebSearch quota, ABORT the
+> archetype queries. If 5×N exceeds the session web-search quota, ABORT the
 > run and tell the user to re-invoke with fewer ideas. Never silently degrade.
 
 ## Helpers (loaded once per run)
@@ -259,30 +259,29 @@ ABORT the run with its stderr.
 Read `references/web-cross-check.md` for the full protocol.
 
 **This step is NOT optional and cannot be silently skipped.**
-Before invoking the WebSearch tool, check whether it is listed as available in
-this session. If it is NOT listed, ABORT THE ENTIRE RUN with this exact message
-to chat:
+Before invoking the web-search tool (Claude Code: `WebSearch`; pi: `websearch`), check whether it is listed as available in this session. If it is NOT listed, ABORT THE ENTIRE RUN with this exact message to chat:
 
 ```
-ERROR: web-cross-check requires the WebSearch tool, which is not enabled in this
+ERROR: web-cross-check requires a web-search tool, which is not enabled in this
 session. GithubPill refuses to emit a first-search verdict without it (silent
 skip caused v0.1.0 blind-spot regressions).
 
 To proceed:
-- Run /githubpill in a session where WebSearch is available, OR
-- Enable WebSearch in your Claude Code allowed-tools for this skill.
+- Run the skill in a session where web search is available, OR
+- Enable web search in your session's tools (Claude Code: WebSearch tool /
+  allowed-tools; pi: the websearch extension).
 ```
 
 Then STOP. Do not emit any verdict, do not write any report.
 
-**If WebSearch IS available:** `echo "[githubpill] start web-cross-check" >&2`.
-Generate exactly 5 WebSearch queries in ONE LLM call (temperature 0), per the
-5 required archetypes in web-cross-check.md. Then invoke the `WebSearch`
-tool **5 TIMES IN PARALLEL** — issue all 5 calls in one assistant turn. The
+**If web search IS available:** `echo "[githubpill] start web-cross-check" >&2`.
+Generate exactly 5 web-search queries in ONE LLM call (temperature 0), per the
+5 required archetypes in web-cross-check.md. Then invoke the web-search tool
+**5 TIMES IN PARALLEL** — issue all 5 calls in one assistant turn. The
 5 queries are independent; serializing them adds 15-20 seconds for no benefit
-and the WebSearch quota cap (5/run) is unchanged.
+and the web-search quota cap (5/run) is unchanged.
 
-If a single WebSearch call returns an error (network, quota, etc.), retry
+If a single web-search call returns an error (network, quota, etc.), retry
 that one call once with a tightened query, then ABORT THE RUN with an error
 citing the failing query — do not produce a partial-coverage verdict.
 
@@ -363,7 +362,7 @@ evidence).
 
 Augment SaaS judge output schema with:
 `{axis_scores, rationale, cand_description_narrative, cand_overlap_narrative, cand_evidence_narrative}` —
-where `cand_evidence_narrative` is a prose conversion of the WebSearch
+where `cand_evidence_narrative` is a prose conversion of the web-search
 snippet (NOT a verbatim quote — per PITFALLS.md #7). Fills the
 `{{CAND_EVIDENCE_NARRATIVE}}` placeholder.
 
@@ -530,20 +529,20 @@ Collect 10 JSON files into the discovery pool. Track gh rate budget delta
 
 `echo "[githubpill] done expand-discover" >&2`.
 
-## Step DEEP-C: WebSearch Expansion (parallel)
+## Step DEEP-C: Web-Search Expansion (parallel)
 
 `echo "[githubpill] start web-expand" >&2`.
 
-Read `deep-search-protocol.md` section "WebSearch Protocol". Generate **5
-WebSearch queries** (one LLM call, temperature 0) biased toward
-`site:github.com` and direct repo links. Invoke the `WebSearch` tool **5
-TIMES IN PARALLEL** — all 5 calls in one assistant turn. Extract every
-`github.com/<owner>/<repo>` URL pattern from results. For each extracted URL,
-run `gh_verify_repo "<owner/repo>"`.
+Read `deep-search-protocol.md` section "Web-Search Protocol". Generate **5
+web-search queries** (one LLM call, temperature 0) biased toward
+`site:github.com` and direct repo links. Invoke the web-search tool (Claude
+Code: `WebSearch`; pi: `websearch`) **5 TIMES IN PARALLEL** — all 5 calls in
+one assistant turn. Extract every `github.com/<owner>/<repo>` URL pattern from
+results. For each extracted URL, run `gh_verify_repo "<owner/repo>"`.
 
 Discard any candidate whose helper exits non-zero (404 — HARD RULE per D2-04,
 T2-03). Capture verified metadata + `verified_at` timestamp. Never quote
-WebSearch snippet text into output — candidate URLs only.
+web-search snippet text into output — candidate URLs only.
 
 `echo "[githubpill] done web-expand" >&2`.
 
@@ -574,9 +573,11 @@ For each selected candidate, clone via plain `git clone` (parallel up to 3
 via `xargs -P 3`):
 
 ```bash
-# Note: the safe-clone-guard PreToolUse hook automatically rewrites this
-# git clone with --depth 1 --filter=blob:none --single-branch --no-tags,
+# Note: the safe-clone guard automatically rewrites this git clone with
+# --depth 1 --filter=blob:none --single-branch --no-tags,
 # GIT_LFS_SKIP_SMUDGE=1, a 60s timeout wrapper, and the 50MB size cap.
+# Claude Code: PreToolUse hook (hooks/safe-clone-guard.sh).
+# pi: bash spawn-hook extension (pi/extensions/githubpill-safe-clone-guard.ts).
 DEST=$(mktemp -d -t githubpill-XXXXXX --tmpdir=/tmp/githubpill)
 git clone "https://github.com/$OWNER_REPO" "$DEST"
 RC=$?
@@ -616,8 +617,12 @@ Output Discipline".
 
 For up to 8 cloned candidates, the per-candidate judge calls are independent.
 Instead of issuing 8 sequential LLM judge calls (~4 minutes total), spawn
-**one subagent per candidate** via the host's Agent / Task tool. Each
-subagent receives:
+**one subagent per candidate** via the host's subagent tool (Claude Code:
+`Task`; pi: `subagent` — installed by the pi port, judge agent
+`githubpill-judge`). If the host exposes no subagent tool, judge sequentially
+in this session — one judge LLM call per candidate; the parallelism is a
+latency optimization, and the one-judge-call-per-candidate rule plus
+mechanical verdict derivation are unchanged. Each subagent receives:
 
 - The cloned-repo path (`$DEST`)
 - The sharpened sentence + preserved terms
@@ -775,7 +780,7 @@ path, rate budget consumed (deep-search delta).
   deep search actually ran on this invocation.
 - Deep-search run-scoped trap (`/tmp/githubpill/run-${RUN_TS}`) cleans on
   EXIT, INT, TERM — boot-time sweep handles orphans >120min old.
-- WebSearch results: candidate URLs only, never quoted snippet text
+- Web-search results: candidate URLs only, never quoted snippet text
   (PITFALLS.md #7).
 - File-path cite format: `path/to/file.ext:LINE`. Without ≥1 cite, candidate
   verdict capped at SUPERFICIAL_MATCH (or VAPOR if `vapor_check` exited 0).
