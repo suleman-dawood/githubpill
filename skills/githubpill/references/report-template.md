@@ -140,7 +140,7 @@ For each verified candidate, substitute this block and concatenate into
   `gh api /repos/{owner}/{name}` returned 200 OK. RPT-04 requirement: **no URL
   appears in any report without this timestamp.**
 - `{{CAND_STALENESS_SUFFIX}}` is either the empty string or a leading
-  ` · `-prefixed badge list from `scripts/staleness.sh`, e.g.
+  ` · `-prefixed badge list from the `emit_staleness` helper (defined in SKILL.md), e.g.
   ` · stale-12mo · archived`. Never the literal string `none` — empty instead.
 - `{{CAND_DESCRIPTION_NARRATIVE}}` is 2–3 prose sentences derived from the
   README + metadata that explain what the project does. **Not** the raw
@@ -163,7 +163,7 @@ mixed in with gh candidates).
 
 **Overlap with your idea:** {{CAND_OVERLAP_NARRATIVE}}
 
-**Category:** {{CAND_CATEGORY}} · Discovered via WebSearch: `{{CAND_SOURCE_QUERY}}` · Axis sum: {{CAND_AXIS_SUM}}
+**Category:** {{CAND_CATEGORY}} · Discovered via web search: `{{CAND_SOURCE_QUERY}}` · Axis sum: {{CAND_AXIS_SUM}}
 ```
 
 **Required SaaS placeholders (verbatim):**
@@ -174,7 +174,7 @@ mixed in with gh candidates).
 
 **Rules:**
 
-- `{{CAND_EVIDENCE_NARRATIVE}}` converts the WebSearch evidence_snippet into
+- `{{CAND_EVIDENCE_NARRATIVE}}` converts the web-search evidence_snippet into
   prose — **not** a raw quote, **not** wrapped in quotation marks.
 - `{{CAND_CATEGORY}}` is one of: `closed-source-saas`, `yc-company`,
   `github-app`, `github-marketplace`, `awesome-list-entry`, `hn-launch`,
@@ -277,7 +277,7 @@ based on which pass produced the candidate set.
 - `{{CAND_PROVENANCE}}` — exactly one of: `first`, `deep-gh`, `deep-web`.
   `first` indicates a candidate carried forward from the first search verified
   set; `deep-gh` came from deep search's expanded `gh api` search; `deep-web`
-  came from deep search's WebSearch path.
+  came from deep search's web-search path.
 - `{{CAND_VAPOR_TRANSPARENCY_SUFFIX}}` — empty string OR the literal
   ` (axes suggested {LABEL})` per D2-10, where `{LABEL}` is the verdict the
   threshold table would have produced absent the vapor override.

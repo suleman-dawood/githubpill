@@ -83,7 +83,7 @@ verdict from the highest per-candidate verdict:
 ## Staleness Does Not Auto-Downgrade
 
 Staleness badges (`archived`, `stale-12mo`, `solo-stale-6mo`) are emitted by
-`scripts/staleness.sh` and surfaced next to the candidate URL in the report.
+the `emit_staleness` helper (defined in SKILL.md) and surfaced next to the candidate URL in the report.
 
 - Badges **DO** inform the `activity` axis score (an archived repo scores
   `activity=0`).
@@ -178,7 +178,7 @@ stands and the report notes that a devil's-advocate pass was run.
 Web-cross-check feeds candidates tagged `provenance: first-web-saas` (closed-source SaaS, YC company landing pages, etc.) into the candidate pool. These have URLs but no source code to clone.
 
 ### Scoring
-Score each non-GitHub candidate on the **same 5 axes** (core_function, target_audience, scope, approach, activity) using ONLY the WebSearch evidence snippet + the candidate's landing-page metadata. Pass the candidate's name + evidence_snippet + source_query into the judge prompt. The same anti-novelty framing applies.
+Score each non-GitHub candidate on the **same 5 axes** (core_function, target_audience, scope, approach, activity) using ONLY the web-search evidence snippet + the candidate's landing-page metadata. Pass the candidate's name + evidence_snippet + source_query into the judge prompt. The same anti-novelty framing applies.
 
 ### Verdict cap (First Search)
 - Without clone evidence, a non-GitHub candidate's verdict label is capped at `WORTH_INSPECTING` (first-search cap, same as gh candidates).
@@ -206,14 +206,14 @@ The five labels:
 - `SIGNIFICANT_OVERLAP` — substantial overlap on core_function + audience or scope.
 - `PARTIAL_OVERLAP` — overlap on core_function only.
 - `SUPERFICIAL_MATCH` — similar keywords, divergent implementation. Default when evidence is thin.
-- `VAPOR` — README claims unsupported by code (mechanically derived from `vapor-check.sh`, NOT the LLM).
+- `VAPOR` — README claims unsupported by code (mechanically derived from the `vapor_check` helper in SKILL.md, NOT the LLM).
 
 Compute (per candidate, deep search only):
 
 - `axis_sum = core_function + target_audience + scope + approach + activity` (0-15)
 - `core_pair = core_function + target_audience` (0-6)
 - `evidence_count = len(file_paths)` from judge JSON output
-- `is_vapor = (vapor-check.sh exited 0 on this candidate)` — mechanical input, NOT from LLM
+- `is_vapor = (vapor_check helper exited 0 on this candidate)` — mechanical input, NOT from LLM
 
 Threshold table (evaluated top-to-bottom; first match wins):
 
@@ -234,7 +234,7 @@ computes the verdict.
 Any deep-search verdict at `PARTIAL_OVERLAP` or stronger requires `evidence_count >= 1`
 — at least one cited file path from the clone. If the judge fails to cite any
 path, the derivation step caps the verdict at `SUPERFICIAL_MATCH` (or `VAPOR` if
-the `vapor-check.sh` result was 0). This is the answer to PITFALLS.md #1 (judge
+the `vapor_check` helper result was 0). This is the answer to PITFALLS.md #1 (judge
 flip-flop) and #8 (vapor-detection-done-wrong).
 
 Cite format: `path/to/file.ext:LINE` where `LINE` is the 1-indexed line number
@@ -260,7 +260,7 @@ limit). Selection order:
    `<pkg-name>/__init__.py`, `cmd/<pkg>/main.go`.
 3. **Top-level source files** — up to 8 files from
    `find . -maxdepth 2 -type f` matching the source-extension allowlist
-   from `scripts/vapor-check.sh`, ordered by file size descending.
+   from the `vapor_check` helper in SKILL.md, ordered by file size descending.
 
 **Total cap: 10 files per repo.** If steps 1+2 already yield N files,
 step 3 contributes at most `10 - N` more.
@@ -326,7 +326,7 @@ derives it mechanically via the threshold table above.
 - LLM still emits ONLY `axis_scores`, `rationale`, `file_paths`, and `flag`. The
   `candidate_verdict` is derived mechanically by SKILL.md per the deep-search
   threshold table.
-- `VAPOR` is set by SKILL.md from the `vapor-check.sh` exit code, NOT by the LLM.
+- `VAPOR` is set by SKILL.md from the `vapor_check` helper exit code, NOT by the LLM.
 - If LLM emits `flag: "suspected_injection"`, SKILL.md sets verdict to
   `SUPERFICIAL_MATCH` with a report note "candidate skipped due to suspected
   adversarial README" — axes from that call are discarded.

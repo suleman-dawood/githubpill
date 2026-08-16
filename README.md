@@ -48,6 +48,24 @@ You get a verdict in 60 seconds. If it's 🟡 or 🔴, you can go for a deep sea
 
 Reports land in `./githubpill-reports/YYYY-MM-DD-<slug>.md`. One file per idea.
 
+## pi support
+
+GithubPill also runs inside [pi](https://github.com/badlogic/pi), which
+implements the same Agent Skills standard. The protocol is one canonical
+skill (`skills/githubpill/`); only the execution surfaces differ (pi has no
+PreToolUse hooks or Task tool, so the port ships equivalents as extensions).
+
+```bash
+bash pi/install.sh        # symlinks skill + extensions + judge agent into ~/.pi
+# restart pi, or run /reload
+```
+
+Use it the same way — `/skill:githubpill <idea>` or just describe an idea.
+Deep search parallelizes its per-candidate judges via a `subagent` tool and
+the `githubpill-judge` agent; clone safety is enforced by a bash spawn-hook
+extension that runs the same contract as the Claude Code hook. See
+[`pi/README.md`](pi/README.md) for the full mapping and tests.
+
 ## Limitations
 
 - **GitHub-only.** GitLab, Codeberg, self-hosted forges, and package-registry-only tools are not searched currently.
