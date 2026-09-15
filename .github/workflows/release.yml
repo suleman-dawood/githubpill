@@ -19,7 +19,10 @@ jobs:
     name: bump, publish to npm, and tag
     runs-on: ubuntu-latest
     # Skip the version-bump commit this workflow itself pushes.
-    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]')
+    # Match the subject only: a squash-merge body can mention the phrase.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      !startsWith(github.event.head_commit.message, 'chore(release):')
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,7 +53,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          npm version patch -m "chore(release): %s [skip release]"
+          npm version patch -m "chore(release): %s"
           echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
 
       - name: Publish to npm
