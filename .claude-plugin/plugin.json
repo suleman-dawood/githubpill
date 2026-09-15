@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "githubpill",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Prior-art reconnaissance for project ideas: multi-source search, LLM synthesis, verified citations, and a 🟢/🟡/🔴 verdict.",
   "author": {
     "name": "Suleman Dawood",
