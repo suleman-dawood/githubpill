@@ -159,10 +159,10 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
 tests, builds, publishes to npm and creates the GitHub release.
 
-The workflow needs an `NPM_TOKEN` repository secret: a **granular access token
-with "Bypass 2FA" enabled** and read/write package access. A classic token
-without a 2FA bypass is rejected with `E403` because the account requires 2FA
-to publish.
+The workflow needs an `NPM_TOKEN` repository secret. On a 2FA-enabled account
+it must be a classic **Automation** token (or a granular token with "Bypass
+2FA" enabled); a classic **Publish** token is rejected with `E403` because it
+still requires a one-time password.
 
 ## Roadmap
 
