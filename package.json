@@ -1,27 +1,56 @@
 {
   "name": "githubpill",
-  "version": "0.6.0",
-  "description": "Claude Code plugin to validate whether your GitHub project idea already exists before you build it.",
+  "version": "1.0.0",
+  "description": "Prior-art reconnaissance for project ideas: multi-source retrieval, LLM synthesis, verified citations, and a verdict.",
+  "type": "module",
   "license": "MIT",
   "author": "Suleman Dawood <sulemandawood123@protonmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/suleman-dawood/reporecon.git"
+    "url": "https://github.com/suleman-dawood/githubpill.git"
   },
-  "homepage": "https://github.com/suleman-dawood/reporecon",
+  "homepage": "https://github.com/suleman-dawood/githubpill",
   "bugs": {
-    "url": "https://github.com/suleman-dawood/reporecon/issues"
+    "url": "https://github.com/suleman-dawood/githubpill/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "githubpill": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   },
   "keywords": [
-    "claude-code",
-    "claude-code-plugin",
-    "claude-code-skill",
     "github",
-    "skill",
-    "reconnaissance",
     "prior-art",
     "validation",
-    "githubpill"
+    "research",
+    "retrieval",
+    "cli"
   ],
-  "private": true
+  "private": false
 }

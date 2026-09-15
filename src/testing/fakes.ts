@@ -1,0 +1,70 @@
+import type { Config } from "../config.js";
+import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
+import type { LLMClient, StructuredRequest } from "../synthesis/llm.js";
+import type { SearchOptions, SourceAdapter } from "../adapters/types.js";
+
+export function testConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    model: "fake-model",
+    perSourceLimit: 5,
+    maxCandidates: 5,
+    concurrency: 2,
+    requestTimeoutMs: 1_000,
+    maxQueriesPerSource: 2,
+    ...overrides,
+  };
+}
+
+/** Returns a preset object for the requested schema name, parsed by the schema. */
+export class FakeLLM implements LLMClient {
+  readonly model = "fake-model";
+  constructor(private readonly responses: Record<string, unknown> = {}) {}
+
+  async completeStructured<T>(request: StructuredRequest<T>): Promise<T> {
+    const preset = this.responses[request.schemaName] ?? {};
+    return request.schema.parse(preset);
+  }
+}
+
+export interface FakeAdapterOptions {
+  id?: SourceId;
+  hits?: RawHit[];
+  verifyOk?: boolean;
+}
+
+export class FakeAdapter implements SourceAdapter {
+  readonly id: SourceId;
+  readonly label: string;
+
+  constructor(private readonly options: FakeAdapterOptions = {}) {
+    this.id = options.id ?? "github";
+    this.label = this.id;
+  }
+
+  async search(query: string, _options: SearchOptions): Promise<RawHit[]> {
+    return (this.options.hits ?? []).map((raw) => ({ ...raw, query }));
+  }
+
+  async verify(_candidate: Candidate, _options: SearchOptions): Promise<Verification> {
+    const ok = this.options.verifyOk ?? true;
+    return { ok, status: ok ? 200 : 404, checkedAt: new Date().toISOString() };
+  }
+}
+
+export function hit(partial: Partial<RawHit> & { id: string }): RawHit {
+  return {
+    source: "github",
+    name: partial.id,
+    url: `https://github.com/${partial.id}`,
+    description: "",
+    rank: 0,
+    ...partial,
+  };
+}
+
+export function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
