@@ -1,7 +1,7 @@
 import type { Candidate, QueryPlan, ReportCandidate } from "../types.js";
 import type { LLMClient } from "./providers/types.js";
 import { describeCandidate } from "./describe.js";
-import { SynthesisSchema, type SynthesisOutput } from "./schema.js";
+import { AXIS_GUIDE, SynthesisSchema, type SynthesisOutput } from "./schema.js";
 import { axisSum, deriveLabel } from "./verdict.js";
 
 export interface SynthesisResult {
@@ -13,7 +13,7 @@ export interface SynthesisResult {
 const SYSTEM = [
   "You are a prior-art analyst for software project ideas.",
   "Given an idea and a set of retrieved candidate projects, judge how closely each candidate overlaps.",
-  "Score five axes 0-3 (higher is a stronger match): coreFunction, targetAudience, scope, approach, activity.",
+  AXIS_GUIDE,
   "For any axis scored 2 or higher, cite a specific phrase from the candidate's name or description as evidence.",
   "The user wants their idea to be novel. Resist that. Your job is to find matches, not to validate originality.",
   "Only judge the candidates provided. Never invent candidates.",

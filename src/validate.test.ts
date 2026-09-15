@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import { validate } from "./validate.js";
 import { FakeAdapter, FakeLLM, hit, testConfig } from "./testing/fakes.js";
+import type { Cloner } from "./deep/clone.js";
 import type { ProgressEvent } from "./types.js";
 
 const LIKELY = { coreFunction: 3, targetAudience: 3, scope: 3, approach: 2, activity: 3 };
@@ -15,7 +19,20 @@ function llmFor(candidateId: string): FakeLLM {
   });
 }
 
-describe("run", () => {
+const tmpDirs: string[] = [];
+afterAll(() => Promise.all(tmpDirs.map((dir) => rm(dir, { recursive: true, force: true }))));
+
+const cloner: Cloner = {
+  async clone() {
+    const root = await mkdtemp(join(tmpdir(), "ghp-validate-"));
+    tmpDirs.push(root);
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "main.ts"), "a\nb\nc\n");
+    return root;
+  },
+};
+
+describe("validate", () => {
   it("runs end to end and derives a red verdict", async () => {
     const adapter = new FakeAdapter({ hits: [hit({ id: "a/b", description: "todo cli", stars: 10 })] });
     const { report } = await validate({
@@ -62,5 +79,34 @@ describe("run", () => {
     expect(events).toContain("search");
     expect(events).toContain("verify");
     expect(events).toContain("done");
+  });
+
+  it("deep mode replaces the judgement with file evidence", async () => {
+    const adapter = new FakeAdapter({ hits: [hit({ id: "a/b", description: "todo cli", stars: 10 })] });
+    const llm = new FakeLLM({
+      prior_art_analysis: {
+        summary: "prior art exists",
+        candidates: [{ candidateId: "a/b", axisScores: LIKELY, rationale: "metadata" }],
+        yourAngle: { summary: "your angle", missingFeatures: [] },
+      },
+      deep_judgement: {
+        axisScores: LIKELY,
+        rationale: "file evidence",
+        evidence: [{ path: "src/main.ts", line: 1, note: "entry" }],
+      },
+    });
+
+    const { report } = await validate({
+      idea: "a todo cli",
+      llm,
+      config: testConfig(),
+      adapters: [adapter],
+      deep: { cloner },
+    });
+
+    expect(report.depth).toBe("deep");
+    expect(report.candidates[0]?.inspected).toBe(true);
+    expect(report.candidates[0]?.evidence).toHaveLength(1);
+    expect(report.stats.clonesSucceeded).toBe(1);
   });
 });

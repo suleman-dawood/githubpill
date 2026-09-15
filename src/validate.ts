@@ -5,6 +5,7 @@ import type { AdapterError } from "./retrieval/fanout.js";
 import { retrieve } from "./retrieval/retrieve.js";
 import { synthesize } from "./synthesis/synthesize.js";
 import { deriveBand, headlineFor } from "./synthesis/verdict.js";
+import { inspectCandidates, type DeepOptions } from "./deep/inspect.js";
 import type { LLMClient } from "./synthesis/providers/types.js";
 
 export interface ValidateOptions {
@@ -12,6 +13,8 @@ export interface ValidateOptions {
   llm: LLMClient;
   config: Config;
   adapters?: SourceAdapter[];
+  /** Enables deep mode when present: clone top candidates and cite file:LINE. */
+  deep?: DeepOptions;
   onProgress?: ProgressHandler;
   signal?: AbortSignal;
 }
@@ -32,24 +35,43 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
   const retrieval = await retrieve({
     idea: options.idea,
     config: options.config,
-    ...(options.adapters ? { adapters: options.adapters } : {}),
-    ...(progress ? { onProgress: progress } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
+    adapters: options.adapters,
+    onProgress: progress,
+    signal: options.signal,
   });
 
   progress?.({ type: "stage", stage: "synthesize" });
   const synthesis = await synthesize(options.idea, retrieval.plan, retrieval.candidates, options.llm);
 
+  let candidates = synthesis.candidates;
+  let clonesAttempted: number | undefined;
+  let clonesSucceeded: number | undefined;
+
+  if (options.deep) {
+    progress?.({ type: "stage", stage: "inspect" });
+    const deep = await inspectCandidates({
+      candidates,
+      plan: retrieval.plan,
+      llm: options.llm,
+      config: options.config,
+      deep: options.deep,
+      onProgress: progress,
+    });
+    candidates = deep.candidates;
+    clonesAttempted = deep.attempted;
+    clonesSucceeded = deep.succeeded;
+  }
+
   progress?.({ type: "stage", stage: "report" });
-  const band = deriveBand(synthesis.candidates.map((candidate) => candidate.label));
+  const band = deriveBand(candidates.map((candidate) => candidate.label));
   const report: Report = {
     idea: options.idea,
     sharpened: retrieval.plan.sharpened,
     preservedTerms: retrieval.plan.preservedTerms,
     band,
-    headline: headlineFor(band, synthesis.candidates.length),
+    headline: headlineFor(band, candidates.length),
     summary: synthesis.summary,
-    candidates: synthesis.candidates,
+    candidates,
     yourAngle: synthesis.yourAngle,
     sourceRuns: retrieval.runs,
     stats: {
@@ -57,11 +79,12 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
       queriesRun: retrieval.runs.length,
       hitsFound: retrieval.hitsFound,
       candidatesConsidered: retrieval.candidates.length,
-      candidatesReported: synthesis.candidates.length,
+      candidatesReported: candidates.length,
       citationsChecked: retrieval.citationsChecked,
       citationsAlive: retrieval.citationsAlive,
+      ...(clonesAttempted === undefined ? {} : { clonesAttempted, clonesSucceeded }),
     },
-    depth: "quick",
+    depth: options.deep ? "deep" : "quick",
     generatedAt: new Date().toISOString(),
   };
 

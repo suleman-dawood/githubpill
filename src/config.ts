@@ -45,6 +45,11 @@ export interface Config {
   concurrency: number;
   requestTimeoutMs: number;
   maxQueriesPerSource: number;
+  /** Deep mode: how many top candidates to clone and inspect. */
+  deepCandidates: number;
+  cloneTimeoutMs: number;
+  deepMaxFiles: number;
+  deepMaxFileLines: number;
   logLevel: LogLevel;
 }
 
@@ -57,6 +62,10 @@ const LimitsSchema = z.object({
   requestTimeoutMs: PositiveInt,
   maxQueriesPerSource: PositiveInt.max(20),
   maxTokens: PositiveInt,
+  deepCandidates: PositiveInt.max(20),
+  cloneTimeoutMs: PositiveInt,
+  deepMaxFiles: PositiveInt.max(50),
+  deepMaxFileLines: PositiveInt.max(2000),
 });
 
 function apiKeyFor(env: NodeJS.ProcessEnv, provider: ProviderId): string | undefined {
@@ -135,6 +144,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
       requestTimeoutMs: env.GITHUBPILL_TIMEOUT_MS ?? 15_000,
       maxQueriesPerSource: env.GITHUBPILL_MAX_QUERIES ?? 6,
       maxTokens: env.GITHUBPILL_MAX_TOKENS ?? 4096,
+      deepCandidates: env.GITHUBPILL_DEEP_CANDIDATES ?? 3,
+      cloneTimeoutMs: env.GITHUBPILL_CLONE_TIMEOUT_MS ?? 60_000,
+      deepMaxFiles: env.GITHUBPILL_DEEP_MAX_FILES ?? 10,
+      deepMaxFileLines: env.GITHUBPILL_DEEP_MAX_FILE_LINES ?? 200,
     });
   } catch (error) {
     throw new ConfigError(`Invalid configuration: ${(error as Error).message}`);
@@ -157,6 +170,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
     concurrency: limits.concurrency,
     requestTimeoutMs: limits.requestTimeoutMs,
     maxQueriesPerSource: limits.maxQueriesPerSource,
+    deepCandidates: limits.deepCandidates,
+    cloneTimeoutMs: limits.cloneTimeoutMs,
+    deepMaxFiles: limits.deepMaxFiles,
+    deepMaxFileLines: limits.deepMaxFileLines,
     logLevel,
   };
 

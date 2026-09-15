@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+/** Axis definitions shared by every judging prompt. */
+export const AXIS_GUIDE = [
+  "Score five axes 0-3 (higher is a stronger match):",
+  "coreFunction = same primary problem;",
+  "targetAudience = same users;",
+  "scope = same breadth of features;",
+  "approach = same implementation strategy or interface;",
+  "activity = actively maintained.",
+].join(" ");
+
 export const AxisScoresSchema = z.object({
   coreFunction: z.number().int().min(0).max(3).describe("Same primary problem? 0 different, 3 same"),
   targetAudience: z.number().int().min(0).max(3).describe("Same users? 0 different, 3 same"),

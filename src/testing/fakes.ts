@@ -18,6 +18,10 @@ export function testConfig(overrides: Partial<Config> = {}): Config {
     concurrency: 2,
     requestTimeoutMs: 1_000,
     maxQueriesPerSource: 2,
+    deepCandidates: 3,
+    cloneTimeoutMs: 1_000,
+    deepMaxFiles: 5,
+    deepMaxFileLines: 50,
     logLevel: "silent",
     ...overrides,
   };
