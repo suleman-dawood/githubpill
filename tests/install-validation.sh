@@ -18,7 +18,9 @@ REQUIRED_FILES=(
   ".claude-plugin/marketplace.json"
   "package.json"
   "README.md"
+  "AGENTS.md"
   "LICENSE"
+  "install.sh"
   "skills/githubpill/SKILL.md"
   "skills/githubpill/references/first-search.md"
   "skills/githubpill/references/deep-search.md"
@@ -52,7 +54,18 @@ for s in "${PROTOCOL_SCRIPTS[@]}"; do
   fi
 done
 
-# ---------- 3. JSON parse validation ----------
+# ---------- 3. Installer sanity ----------
+if [[ -f install.sh ]]; then
+  if [[ -x install.sh ]]; then ok "executable: install.sh"; else fail "not executable: install.sh"; fi
+  if bash -n install.sh 2>/dev/null; then ok "syntax ok: install.sh"; else fail "syntax error: install.sh"; fi
+  if bash install.sh --list >/dev/null 2>&1; then
+    ok "install.sh --list runs"
+  else
+    fail "install.sh --list failed"
+  fi
+fi
+
+# ---------- 4. JSON parse validation ----------
 json_check() {
   local f="$1"
   if command -v jq >/dev/null 2>&1; then
@@ -82,7 +95,7 @@ for jf in ".claude-plugin/plugin.json" ".claude-plugin/marketplace.json" "packag
   fi
 done
 
-# ---------- 4. SKILL.md frontmatter ----------
+# ---------- 5. SKILL.md frontmatter ----------
 SKILL_FILE="skills/githubpill/SKILL.md"
 if [[ -f "$SKILL_FILE" ]]; then
   FM="$(awk '/^---$/{f++; next} f==1{print} f==2{exit}' "$SKILL_FILE")"
@@ -102,7 +115,7 @@ if [[ -f "$SKILL_FILE" ]]; then
   fi
 fi
 
-# ---------- 5. SKILL.md references each reference doc ----------
+# ---------- 6. SKILL.md references each reference doc ----------
 REFERENCE_MDS=(
   first-search.md deep-search.md query-patterns.md
   judge-rubric.md report-template.md web-cross-check.md
@@ -117,7 +130,7 @@ if [[ -f "$SKILL_FILE" ]]; then
   done
 fi
 
-# ---------- 6. No stale script paths in the skill ----------
+# ---------- 7. No stale script paths in the skill ----------
 if grep -rq 'CLAUDE_PLUGIN_ROOT/scripts\|PLUGIN_ROOT/scripts' skills/githubpill; then
   fail "stale \$CLAUDE_PLUGIN_ROOT/scripts reference in skills/githubpill"
 else
