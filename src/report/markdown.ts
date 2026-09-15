@@ -25,6 +25,12 @@ function candidateBlock(candidate: ReportCandidate): string {
   ];
   if (candidate.description) lines.push("", `**What it does:** ${candidate.description}`);
   lines.push("", `**Overlap:** ${candidate.rationale}`);
+  if (candidate.evidence && candidate.evidence.length > 0) {
+    lines.push("", "**Evidence from the clone:**");
+    for (const cite of candidate.evidence) {
+      lines.push(`- \`${cite.path}:${cite.line}\` — ${cite.note}`);
+    }
+  }
   if (facts.length > 0) lines.push("", facts.join(" · "));
   lines.push("", `**Axis scores:** ${scoreLine(candidate)}`);
 

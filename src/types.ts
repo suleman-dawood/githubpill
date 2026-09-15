@@ -166,6 +166,19 @@ export interface ExplorationDirection {
   groundedIn: string[];
 }
 
+/** A retrieved project as shown in an exploration (no verdict attached). */
+export interface ExplorationCandidate {
+  id: string;
+  name: string;
+  url: string;
+  description: string;
+  sources: SourceId[];
+  stars?: number;
+  language?: string;
+  lastActivity?: string;
+  verifiedAt?: string;
+}
+
 export interface ExplorationReport {
   topic: string;
   sharpened: string;
@@ -173,7 +186,7 @@ export interface ExplorationReport {
   clusters: ExplorationCluster[];
   gaps: ExplorationGap[];
   directions: ExplorationDirection[];
-  candidates: ReportCandidate[];
+  candidates: ExplorationCandidate[];
   sourceRuns: SourceRun[];
   stats: ReportStats;
   generatedAt: string;
@@ -187,6 +200,6 @@ export type ProgressEvent =
   | { type: "ranked"; count: number }
   | { type: "verify"; url: string; ok: boolean }
   | { type: "inspect"; candidateId: string; ok: boolean }
-  | { type: "done"; band: VerdictBand };
+  | { type: "done"; band?: VerdictBand };
 
 export type ProgressHandler = (event: ProgressEvent) => void;

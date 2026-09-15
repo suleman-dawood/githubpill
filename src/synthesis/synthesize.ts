@@ -1,5 +1,6 @@
 import type { Candidate, QueryPlan, ReportCandidate } from "../types.js";
 import type { LLMClient } from "./providers/types.js";
+import { describeCandidate } from "./describe.js";
 import { SynthesisSchema, type SynthesisOutput } from "./schema.js";
 import { axisSum, deriveLabel } from "./verdict.js";
 
@@ -19,22 +20,6 @@ const SYSTEM = [
   "Do not emit a verdict label; scores are derived mechanically downstream.",
 ].join(" ");
 
-function describe(candidate: Candidate): string {
-  const facts = [
-    `sources=${candidate.sources.join(",")}`,
-    `stars=${candidate.stars ?? 0}`,
-    candidate.language ? `language=${candidate.language}` : "",
-    candidate.lastActivity ? `lastActivity=${candidate.lastActivity}` : "",
-    candidate.archived ? "archived=true" : "",
-  ].filter(Boolean);
-  return [
-    `- id: ${candidate.id}`,
-    `  name: ${candidate.name}`,
-    `  description: ${candidate.description || "(none)"}`,
-    `  ${facts.join(" · ")}`,
-  ].join("\n");
-}
-
 export function buildPrompt(idea: string, plan: QueryPlan, candidates: readonly Candidate[]): string {
   return [
     `IDEA (sharpened): ${plan.sharpened}`,
@@ -43,7 +28,7 @@ export function buildPrompt(idea: string, plan: QueryPlan, candidates: readonly 
     `ORIGINAL IDEA: ${idea}`,
     "",
     "CANDIDATES:",
-    ...candidates.map(describe),
+    ...candidates.map(describeCandidate),
     "",
     `Judge all ${candidates.length} candidates above. Return one entry per candidate, using the exact id.`,
     "Then write a two-to-three sentence summary of what already exists, and a 'your angle' summary plus the features the idea would need to be distinct.",

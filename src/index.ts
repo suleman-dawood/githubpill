@@ -2,6 +2,7 @@ export type {
   AxisScores,
   Candidate,
   EvidenceCite,
+  ExplorationCandidate,
   ExplorationCluster,
   ExplorationDirection,
   ExplorationGap,
@@ -50,8 +51,12 @@ export { synthesize } from "./synthesis/synthesize.js";
 export { renderJson } from "./report/json.js";
 export { renderMarkdown } from "./report/markdown.js";
 export { renderHtml } from "./report/html.js";
+export { renderExplorationMarkdown } from "./report/explore-markdown.js";
+export { renderExplorationHtml } from "./report/explore-html.js";
 
 export { retrieve } from "./retrieval/retrieve.js";
 export type { Retrieval, RetrieveOptions } from "./retrieval/retrieve.js";
 export { validate } from "./validate.js";
 export type { ValidateOptions, ValidateResult } from "./validate.js";
+export { explore } from "./explore.js";
+export type { ExploreOptions, ExploreResult } from "./explore.js";

@@ -1,4 +1,5 @@
 import type { MatchLabel, Report, ReportCandidate, VerdictBand } from "../types.js";
+import { escapeHtml } from "./escape.js";
 
 const BAND_COLOR: Record<VerdictBand, string> = {
   green: "#22c55e",
@@ -15,14 +16,6 @@ const LABEL_COLOR: Record<MatchLabel, string> = {
   WORTH_INSPECTING: "#eab308",
   UNRELATED: "#64748b",
 };
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function axisBars(candidate: ReportCandidate): string {
   const axes: Array<[string, number]> = [
@@ -60,6 +53,16 @@ function candidateCard(candidate: ReportCandidate): string {
     .map((fact) => `<span class="fact">${escapeHtml(fact)}</span>`)
     .join("");
 
+  const evidence =
+    candidate.evidence && candidate.evidence.length > 0
+      ? `<ul class="evidence">${candidate.evidence
+          .map(
+            (cite) =>
+              `<li><code>${escapeHtml(cite.path)}:${cite.line}</code> — ${escapeHtml(cite.note)}</li>`,
+          )
+          .join("")}</ul>`
+      : "";
+
   return `
     <article class="candidate">
       <header>
@@ -69,6 +72,7 @@ function candidateCard(candidate: ReportCandidate): string {
       <div class="meta">${verified}<span class="fact">${candidate.sources.join(" · ")}</span>${facts}</div>
       ${candidate.description ? `<p class="description">${escapeHtml(candidate.description)}</p>` : ""}
       <p class="rationale">${escapeHtml(candidate.rationale)}</p>
+      ${evidence}
       ${axisBars(candidate)}
     </article>`;
 }
@@ -114,6 +118,8 @@ export function renderHtml(report: Report): string {
   .badge-unverified { background: #3f1d1d; color: #fca5a5; }
   .description { margin: 8px 0; color: #cbd5e1; }
   .rationale { margin: 8px 0; color: #94a3b8; }
+  .evidence { margin: 8px 0; padding-left: 18px; color: #cbd5e1; font-size: 13px; }
+  .evidence code { color: #7dd3fc; }
   .axes { display: grid; gap: 6px; margin-top: 12px; }
   .axis { display: grid; grid-template-columns: 72px 1fr 20px; align-items: center; gap: 10px; font-size: 12px; color: #94a3b8; }
   .axis-track { height: 6px; background: #1e293b; border-radius: 999px; overflow: hidden; }

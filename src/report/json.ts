@@ -1,5 +1,3 @@
-import type { Report } from "../types.js";
-
-export function renderJson(report: Report): string {
-  return `${JSON.stringify(report, null, 2)}\n`;
+export function renderJson(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
 }

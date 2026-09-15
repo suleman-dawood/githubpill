@@ -6,27 +6,32 @@ import { loadConfig, DEFAULT_MODELS } from "./config.js";
 import { createAdapters } from "./adapters/index.js";
 import { createLLMClient } from "./synthesis/providers/index.js";
 import { validate } from "./validate.js";
+import { explore } from "./explore.js";
 import { renderJson } from "./report/json.js";
 import { renderMarkdown } from "./report/markdown.js";
 import { renderHtml } from "./report/html.js";
-import { createLogger } from "./logger.js";
+import { renderExplorationMarkdown } from "./report/explore-markdown.js";
+import { renderExplorationHtml } from "./report/explore-html.js";
+import { createLogger, type Logger } from "./logger.js";
 import { ConfigError, GithubPillError } from "./errors.js";
-import type { ProgressEvent, Report } from "./types.js";
+import type { ExplorationReport, ProgressEvent, Report } from "./types.js";
 
 const HELP = `githubpill — prior-art reconnaissance for project ideas
 
 Usage:
-  githubpill [options] "<idea>"
+  githubpill [options] "<idea>"            Validate an idea (default)
+  githubpill explore [options] "<space>"   Explore a space for openings
 
 Options:
-  --provider <id>        LLM provider: anthropic | openai | gemini
+  --deep                 Clone the top candidates and cite file:LINE evidence (validate only)
+  --provider <id>        LLM provider: anthropic | openai | gemini | deepseek
   --model <id>           Model id (default depends on provider)
   --sources <csv>        Sources: github,npm,pypi,hackernews
   --max-candidates <n>   Cap candidates carried into synthesis
   --out <dir>            Output directory (default: githubpill-reports)
   --json                 Also write the machine-readable report (.json)
   --html                 Also write the self-contained report (.html)
-  --no-write             Print the verdict only, write no files
+  --no-write             Print the result only, write no files
   --quiet                Suppress progress output
   -h, --help             Show this help
 
@@ -42,8 +47,10 @@ Other environment:
   GITHUBPILL_MODEL          Override the model id
   GITHUBPILL_LOG            silent | error | warn | info | debug
 
-Example:
+Examples:
   githubpill "a CLI that previews diffs as a side-by-side TUI"
+  githubpill --deep "a self-hosted RSS reader"
+  githubpill explore "local-first note taking"
 `;
 
 function slugify(text: string): string {
@@ -56,18 +63,61 @@ function slugify(text: string): string {
   return slug || "untitled";
 }
 
-async function uniquePath(dir: string, base: string, ext: string): Promise<string> {
-  for (let n = 1; ; n += 1) {
-    const candidate = join(dir, n === 1 ? `${base}${ext}` : `${base}-${n}${ext}`);
-    try {
-      await access(candidate);
-    } catch {
-      return candidate;
-    }
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
   }
 }
 
-function verdictBlock(report: Report, written: string[]): string {
+/** Find a base filename whose .md/.json/.html variants are all free. */
+async function uniqueBase(dir: string, base: string): Promise<string> {
+  for (let n = 1; ; n += 1) {
+    const candidate = n === 1 ? base : `${base}-${n}`;
+    const taken = await Promise.all(
+      [".md", ".json", ".html"].map((ext) => exists(join(dir, `${candidate}${ext}`))),
+    );
+    if (!taken.some(Boolean)) return candidate;
+  }
+}
+
+interface Artifacts {
+  markdown: string;
+  json: unknown;
+  html: string;
+}
+
+async function writeReports(
+  outDir: string,
+  base: string,
+  write: boolean,
+  flags: { json: boolean; html: boolean },
+  artifacts: Artifacts,
+): Promise<string[]> {
+  if (!write) return [];
+  await mkdir(outDir, { recursive: true });
+  const stem = await uniqueBase(outDir, base);
+
+  const markdownPath = join(outDir, `${stem}.md`);
+  await writeFile(markdownPath, artifacts.markdown, "utf8");
+  const written = [markdownPath];
+
+  if (flags.json) {
+    const jsonPath = join(outDir, `${stem}.json`);
+    await writeFile(jsonPath, renderJson(artifacts.json), "utf8");
+    written.push(jsonPath);
+  }
+  if (flags.html) {
+    const htmlPath = join(outDir, `${stem}.html`);
+    await writeFile(htmlPath, artifacts.html, "utf8");
+    written.push(htmlPath);
+  }
+  return written;
+}
+
+function validationBlock(report: Report, written: string[]): string {
   const emoji = { green: "🟢", yellow: "🟡", red: "🔴" }[report.band];
   const lines = [`${emoji} ${report.headline}`, "", `Your idea: "${report.sharpened}"`];
 
@@ -82,10 +132,51 @@ function verdictBlock(report: Report, written: string[]): string {
   return `${lines.join("\n")}\n`;
 }
 
+function explorationBlock(report: ExplorationReport, written: string[]): string {
+  const lines = [
+    `🧭 Explored "${report.sharpened}"`,
+    `${report.candidates.length} projects · ${report.clusters.length} clusters · ${report.gaps.length} gaps`,
+  ];
+
+  if (report.directions.length > 0) {
+    lines.push("", "Directions:");
+    for (const direction of report.directions.slice(0, 3)) {
+      lines.push(`- ${direction.idea}`);
+    }
+  }
+  if (written.length > 0) lines.push("", `Report: ${written.join(", ")}`);
+  return `${lines.join("\n")}\n`;
+}
+
+function progressHandler(log: Logger): (event: ProgressEvent) => void {
+  return (event) => {
+    switch (event.type) {
+      case "stage":
+        log.info(`[githubpill] ${event.stage}`);
+        break;
+      case "search":
+        log.info(`  ${event.source}: ${event.query} -> ${event.hits} hits`);
+        break;
+      case "ranked":
+        log.info(`  ranked ${event.count} candidates`);
+        break;
+      case "verify":
+        log.info(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}`);
+        break;
+      case "inspect":
+        log.info(`  inspect ${event.ok ? "ok" : "skipped"} ${event.candidateId}`);
+        break;
+      case "done":
+        break;
+    }
+  };
+}
+
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+      deep: { type: "boolean", default: false },
       provider: { type: "string" },
       model: { type: "string" },
       sources: { type: "string" },
@@ -103,7 +194,10 @@ async function main(): Promise<void> {
     process.stdout.write(HELP);
     return;
   }
-  if (positionals.length === 0) {
+
+  const mode = positionals[0] === "explore" ? "explore" : "validate";
+  const subject = (mode === "explore" ? positionals.slice(1) : positionals).join(" ").trim();
+  if (!subject) {
     process.stderr.write(HELP);
     process.exitCode = 1;
     return;
@@ -121,30 +215,52 @@ async function main(): Promise<void> {
   const log = createLogger(config.logLevel);
   const llm = createLLMClient(config.llm);
   const adapters = createAdapters(config.sources);
+  const onProgress = progressHandler(log);
 
-  log.info(`[githubpill] provider=${llm.provider} model=${llm.model} sources=${config.sources.join(",")}`);
+  log.info(
+    `[githubpill] mode=${mode} provider=${llm.provider} model=${llm.model} sources=${config.sources.join(",")}`,
+  );
 
-  const onProgress = (event: ProgressEvent): void => {
-    switch (event.type) {
-      case "stage":
-        log.info(`[githubpill] ${event.stage}`);
-        break;
-      case "search":
-        log.info(`  ${event.source}: ${event.query} -> ${event.hits} hits`);
-        break;
-      case "ranked":
-        log.info(`  ranked ${event.count} candidates`);
-        break;
-      case "verify":
-        log.info(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}`);
-        break;
-      case "done":
-        break;
-    }
-  };
+  const flags = { json: values.json, html: values.html };
+  const write = !values["no-write"];
 
-  const { report, errors, dropped } = await validate({ idea: positionals.join(" "), llm, config, adapters, onProgress });
+  if (mode === "explore") {
+    if (values.deep) log.warn("[githubpill] --deep has no effect in explore mode");
+    const { report, errors, dropped } = await explore({ topic: subject, llm, config, adapters, onProgress });
+    reportWarnings(log, errors, dropped);
+    const base = `${report.generatedAt.slice(0, 10)}-explore-${slugify(report.sharpened)}`;
+    const written = await writeReports(values.out, base, write, flags, {
+      markdown: renderExplorationMarkdown(report),
+      json: report,
+      html: renderExplorationHtml(report),
+    });
+    process.stdout.write(explorationBlock(report, written));
+    return;
+  }
 
+  const { report, errors, dropped } = await validate({
+    idea: subject,
+    llm,
+    config,
+    adapters,
+    onProgress,
+    ...(values.deep ? { deep: {} } : {}),
+  });
+  reportWarnings(log, errors, dropped);
+  const base = `${report.generatedAt.slice(0, 10)}-${slugify(report.sharpened)}`;
+  const written = await writeReports(values.out, base, write, flags, {
+    markdown: renderMarkdown(report),
+    json: report,
+    html: renderHtml(report),
+  });
+  process.stdout.write(validationBlock(report, written));
+}
+
+function reportWarnings(
+  log: Logger,
+  errors: readonly { source: string; query: string; message: string }[],
+  dropped: readonly unknown[],
+): void {
   if (errors.length > 0) {
     log.warn(`[githubpill] ${errors.length} query/queries failed and were skipped:`);
     for (const error of errors.slice(0, 5)) {
@@ -154,29 +270,6 @@ async function main(): Promise<void> {
   if (dropped.length > 0) {
     log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that failed verification.`);
   }
-
-  const written: string[] = [];
-  if (!values["no-write"]) {
-    await mkdir(values.out, { recursive: true });
-    const base = `${report.generatedAt.slice(0, 10)}-${slugify(report.sharpened)}`;
-
-    const markdownPath = await uniquePath(values.out, base, ".md");
-    await writeFile(markdownPath, renderMarkdown(report), "utf8");
-    written.push(markdownPath);
-
-    if (values.json) {
-      const jsonPath = await uniquePath(values.out, base, ".json");
-      await writeFile(jsonPath, renderJson(report), "utf8");
-      written.push(jsonPath);
-    }
-    if (values.html) {
-      const htmlPath = await uniquePath(values.out, base, ".html");
-      await writeFile(htmlPath, renderHtml(report), "utf8");
-      written.push(htmlPath);
-    }
-  }
-
-  process.stdout.write(verdictBlock(report, written));
 }
 
 main().catch((error: unknown) => {
