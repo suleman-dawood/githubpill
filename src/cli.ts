@@ -2,13 +2,15 @@
 import { parseArgs } from "node:util";
 import { access, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadConfig } from "./config.js";
-import { defaultAdapters } from "./adapters/index.js";
-import { AnthropicClient } from "./synthesis/llm.js";
+import { loadConfig, DEFAULT_MODELS } from "./config.js";
+import { createAdapters } from "./adapters/index.js";
+import { createLLMClient } from "./synthesis/providers/index.js";
 import { run } from "./pipeline.js";
 import { renderJson } from "./report/json.js";
 import { renderMarkdown } from "./report/markdown.js";
 import { renderHtml } from "./report/html.js";
+import { createLogger } from "./logger.js";
+import { ConfigError, GithubPillError } from "./errors.js";
 import type { ProgressEvent, Report } from "./types.js";
 
 const HELP = `githubpill — prior-art reconnaissance for project ideas
@@ -17,20 +19,27 @@ Usage:
   githubpill [options] "<idea>"
 
 Options:
+  --provider <id>        LLM provider: anthropic | openai | gemini
+  --model <id>           Model id (default depends on provider)
+  --sources <csv>        Sources: github,npm,pypi,hackernews
+  --max-candidates <n>   Cap candidates carried into synthesis
   --out <dir>            Output directory (default: githubpill-reports)
   --json                 Also write the machine-readable report (.json)
   --html                 Also write the self-contained report (.html)
-  --sources <csv>        Restrict sources: github,npm,pypi,hackernews
-  --model <id>           Override the LLM model
-  --max-candidates <n>   Cap candidates carried into synthesis
   --no-write             Print the verdict only, write no files
   --quiet                Suppress progress output
   -h, --help             Show this help
 
-Environment:
-  ANTHROPIC_API_KEY      Required for the synthesis step
-  GITHUB_TOKEN / GH_TOKEN  Optional; raises GitHub rate limits (falls back to \`gh auth token\`)
-  GITHUBPILL_MODEL       Default model id
+Providers and API keys (first key found selects the provider):
+  anthropic   ANTHROPIC_API_KEY            default model ${DEFAULT_MODELS.anthropic}
+  openai      OPENAI_API_KEY               default model ${DEFAULT_MODELS.openai}
+  gemini      GEMINI_API_KEY or GOOGLE_API_KEY   default model ${DEFAULT_MODELS.gemini}
+
+Other environment:
+  GITHUB_TOKEN / GH_TOKEN   Optional; raises GitHub rate limits (falls back to \`gh auth token\`)
+  GITHUBPILL_PROVIDER       Force a provider instead of auto-detecting
+  GITHUBPILL_MODEL          Override the model id
+  GITHUBPILL_LOG            silent | error | warn | info | debug
 
 Example:
   githubpill "a CLI that previews diffs as a side-by-side TUI"
@@ -46,25 +55,6 @@ function slugify(text: string): string {
   return slug || "untitled";
 }
 
-function printProgress(event: ProgressEvent): void {
-  switch (event.type) {
-    case "stage":
-      process.stderr.write(`[githubpill] ${event.stage}\n`);
-      break;
-    case "search":
-      process.stderr.write(`  ${event.source}: ${event.query} -> ${event.hits} hits\n`);
-      break;
-    case "ranked":
-      process.stderr.write(`  ranked ${event.count} candidates\n`);
-      break;
-    case "verify":
-      process.stderr.write(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}\n`);
-      break;
-    case "done":
-      break;
-  }
-}
-
 async function uniquePath(dir: string, base: string, ext: string): Promise<string> {
   for (let n = 1; ; n += 1) {
     const candidate = join(dir, n === 1 ? `${base}${ext}` : `${base}-${n}${ext}`);
@@ -78,16 +68,12 @@ async function uniquePath(dir: string, base: string, ext: string): Promise<strin
 
 function verdictBlock(report: Report, written: string[]): string {
   const emoji = { green: "🟢", yellow: "🟡", red: "🔴" }[report.band];
-  const lines = [
-    `${emoji} ${report.headline}`,
-    "",
-    `Your idea: "${report.sharpened}"`,
-  ];
-  const top = report.candidates.slice(0, 3);
-  if (top.length === 0) {
+  const lines = [`${emoji} ${report.headline}`, "", `Your idea: "${report.sharpened}"`];
+
+  if (report.candidates.length === 0) {
     lines.push("No candidate projects found.");
   } else {
-    for (const candidate of top) {
+    for (const candidate of report.candidates.slice(0, 3)) {
       lines.push(`- ${candidate.name} — ${candidate.label} (sum=${candidate.axisSum}) ${candidate.url}`);
     }
   }
@@ -99,12 +85,13 @@ async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
+      provider: { type: "string" },
+      model: { type: "string" },
+      sources: { type: "string" },
+      "max-candidates": { type: "string" },
       out: { type: "string", default: "githubpill-reports" },
       json: { type: "boolean", default: false },
       html: { type: "boolean", default: false },
-      sources: { type: "string" },
-      model: { type: "string" },
-      "max-candidates": { type: "string" },
       "no-write": { type: "boolean", default: false },
       quiet: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
@@ -121,42 +108,50 @@ async function main(): Promise<void> {
     return;
   }
 
-  const idea = positionals.join(" ");
-  const env = values.sources ? { ...process.env, GITHUBPILL_SOURCES: values.sources } : process.env;
+  // Route CLI overrides through the same validated config path as env vars.
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (values.provider) env.GITHUBPILL_PROVIDER = values.provider;
+  if (values.model) env.GITHUBPILL_MODEL = values.model;
+  if (values.sources) env.GITHUBPILL_SOURCES = values.sources;
+  if (values["max-candidates"]) env.GITHUBPILL_MAX_CANDIDATES = values["max-candidates"];
+  if (values.quiet) env.GITHUBPILL_LOG = "silent";
+
   const config = loadConfig(env);
-  if (values.model) config.model = values.model;
-  if (values["max-candidates"]) config.maxCandidates = Number(values["max-candidates"]);
+  const log = createLogger(config.logLevel);
+  const llm = createLLMClient(config.llm);
+  const adapters = createAdapters(config.sources);
 
-  if (!config.anthropicApiKey) {
-    process.stderr.write(
-      "ERROR: ANTHROPIC_API_KEY is required for the synthesis step. Set it and retry.\n",
-    );
-    process.exitCode = 1;
-    return;
-  }
+  log.info(`[githubpill] provider=${llm.provider} model=${llm.model} sources=${config.sources.join(",")}`);
 
-  const llm = new AnthropicClient({
-    apiKey: config.anthropicApiKey,
-    model: config.model,
-    ...(process.env.GITHUBPILL_LLM_BASE_URL ? { baseUrl: process.env.GITHUBPILL_LLM_BASE_URL } : {}),
-  });
-  const adapters = defaultAdapters(env);
-  const { report, errors, dropped } = await run({
-    idea,
-    llm,
-    config,
-    adapters,
-    ...(values.quiet ? {} : { onProgress: printProgress }),
-  });
+  const onProgress = (event: ProgressEvent): void => {
+    switch (event.type) {
+      case "stage":
+        log.info(`[githubpill] ${event.stage}`);
+        break;
+      case "search":
+        log.info(`  ${event.source}: ${event.query} -> ${event.hits} hits`);
+        break;
+      case "ranked":
+        log.info(`  ranked ${event.count} candidates`);
+        break;
+      case "verify":
+        log.info(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}`);
+        break;
+      case "done":
+        break;
+    }
+  };
+
+  const { report, errors, dropped } = await run({ idea: positionals.join(" "), llm, config, adapters, onProgress });
 
   if (errors.length > 0) {
-    process.stderr.write(`WARN: ${errors.length} query/queries failed and were skipped:\n`);
+    log.warn(`[githubpill] ${errors.length} query/queries failed and were skipped:`);
     for (const error of errors.slice(0, 5)) {
-      process.stderr.write(`  ${error.source} "${error.query}": ${error.message}\n`);
+      log.warn(`  ${error.source} "${error.query}": ${error.message}`);
     }
   }
   if (dropped.length > 0) {
-    process.stderr.write(`WARN: dropped ${dropped.length} candidate(s) that failed verification.\n`);
+    log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that failed verification.`);
   }
 
   const written: string[] = [];
@@ -184,6 +179,12 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`ERROR: ${error instanceof Error ? error.message : String(error)}\n`);
+  if (error instanceof ConfigError) {
+    process.stderr.write(`Configuration error: ${error.message}\n`);
+  } else if (error instanceof GithubPillError) {
+    process.stderr.write(`${error.name}: ${error.message}\n`);
+  } else {
+    process.stderr.write(`Unexpected error: ${error instanceof Error ? error.message : String(error)}\n`);
+  }
   process.exitCode = 1;
 });

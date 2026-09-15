@@ -1,6 +1,7 @@
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
 import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
-import { HttpError, httpGet } from "./http.js";
+import { httpGet } from "./http.js";
+import { HttpError } from "../errors.js";
 
 const API = "https://pypi.org";
 

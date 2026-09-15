@@ -1,3 +1,5 @@
+import { HttpError } from "../errors.js";
+
 export interface HttpOptions {
   headers?: Record<string, string>;
   timeoutMs?: number;
@@ -13,15 +15,9 @@ export interface HttpResponse {
   headers: Headers;
 }
 
-export class HttpError extends Error {
-  constructor(
-    message: string,
-    readonly status: number | null,
-    readonly url: string,
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
+interface RequestSpec {
+  method: "GET" | "POST";
+  body?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -39,22 +35,24 @@ function backoffMs(attempt: number, headers: Headers): number {
   return 500 * 2 ** attempt;
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** GET a URL with a timeout, bounded retries, and 429/5xx backoff. */
-export async function httpGet(url: string, options: HttpOptions = {}): Promise<HttpResponse> {
+async function request(url: string, spec: RequestSpec, options: HttpOptions): Promise<HttpResponse> {
   const retries = options.retries ?? DEFAULT_RETRIES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   for (let attempt = 0; ; attempt += 1) {
     const timeout = AbortSignal.timeout(timeoutMs);
-    const signal = options.signal
-      ? AbortSignal.any([options.signal, timeout])
-      : timeout;
+    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
 
     let response: Response;
     try {
-      response = await fetch(url, { headers: options.headers, signal });
+      response = await fetch(url, {
+        method: spec.method,
+        headers: options.headers,
+        signal,
+        ...(spec.body === undefined ? {} : { body: spec.body }),
+      });
     } catch (error) {
       if (attempt < retries) {
         await sleep(500 * 2 ** attempt);
@@ -79,12 +77,32 @@ export async function httpGet(url: string, options: HttpOptions = {}): Promise<H
   }
 }
 
+export function httpGet(url: string, options: HttpOptions = {}): Promise<HttpResponse> {
+  return request(url, { method: "GET" }, options);
+}
+
+export function httpPost(url: string, body: unknown, options: HttpOptions = {}): Promise<HttpResponse> {
+  return request(
+    url,
+    { method: "POST", body: JSON.stringify(body) },
+    { ...options, headers: { "content-type": "application/json", ...options.headers } },
+  );
+}
+
+export function parseJson<T>(response: HttpResponse): T {
+  try {
+    return JSON.parse(response.text) as T;
+  } catch {
+    throw new HttpError(`invalid JSON from ${response.finalUrl}`, response.status, response.finalUrl);
+  }
+}
+
 export async function getJson<T>(url: string, options: HttpOptions = {}): Promise<T> {
   const response = await httpGet(url, options);
   if (!response.ok) {
     throw new HttpError(`GET ${url} returned ${response.status}`, response.status, url);
   }
-  return JSON.parse(response.text) as T;
+  return parseJson<T>(response);
 }
 
 /** Run async work over items with a bounded number of in-flight tasks. */

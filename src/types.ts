@@ -1,4 +1,8 @@
-export type SourceId = "github" | "npm" | "pypi" | "hackernews";
+export const SOURCE_IDS = ["github", "npm", "pypi", "hackernews"] as const;
+export type SourceId = (typeof SOURCE_IDS)[number];
+
+export const PROVIDER_IDS = ["anthropic", "openai", "gemini"] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 /**
  * A normalized query plan. Adapters translate it into their own query syntax,

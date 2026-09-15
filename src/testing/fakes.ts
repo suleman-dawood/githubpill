@@ -1,23 +1,33 @@
 import type { Config } from "../config.js";
-import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import type { LLMClient, StructuredRequest } from "../synthesis/llm.js";
+import type { Candidate, ProviderId, RawHit, SourceId, Verification } from "../types.js";
+import type { LLMClient, StructuredRequest } from "../synthesis/providers/types.js";
 import type { SearchOptions, SourceAdapter } from "../adapters/types.js";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
   return {
-    model: "fake-model",
+    llm: {
+      provider: "anthropic",
+      apiKey: "test-key",
+      model: "fake-model",
+      maxTokens: 1024,
+      timeoutMs: 1_000,
+    },
+    sources: ["github", "npm", "pypi", "hackernews"],
     perSourceLimit: 5,
     maxCandidates: 5,
     concurrency: 2,
     requestTimeoutMs: 1_000,
     maxQueriesPerSource: 2,
+    logLevel: "silent",
     ...overrides,
   };
 }
 
 /** Returns a preset object for the requested schema name, parsed by the schema. */
 export class FakeLLM implements LLMClient {
+  readonly provider: ProviderId = "anthropic";
   readonly model = "fake-model";
+
   constructor(private readonly responses: Record<string, unknown> = {}) {}
 
   async completeStructured<T>(request: StructuredRequest<T>): Promise<T> {

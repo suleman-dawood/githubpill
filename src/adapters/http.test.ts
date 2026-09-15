@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { HttpError, getJson, httpGet, mapLimit } from "./http.js";
+import { getJson, httpGet, mapLimit } from "./http.js";
+import { HttpError } from "../errors.js";
 
 describe("mapLimit", () => {
   it("preserves order and bounds concurrency", async () => {

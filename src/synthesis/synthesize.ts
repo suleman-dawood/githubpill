@@ -1,5 +1,5 @@
 import type { Candidate, QueryPlan, ReportCandidate } from "../types.js";
-import type { LLMClient } from "./llm.js";
+import type { LLMClient } from "./providers/types.js";
 import { SynthesisSchema, type SynthesisOutput } from "./schema.js";
 import { axisSum, deriveLabel } from "./verdict.js";
 
@@ -52,7 +52,7 @@ export function buildPrompt(idea: string, plan: QueryPlan, candidates: readonly 
     .join("\n");
 }
 
-function assemble(plan: QueryPlan, candidates: readonly Candidate[], output: SynthesisOutput): SynthesisResult {
+function assemble(candidates: readonly Candidate[], output: SynthesisOutput): SynthesisResult {
   const byId = new Map(output.candidates.map((entry) => [entry.candidateId, entry]));
 
   const judged: ReportCandidate[] = candidates.map((candidate) => {
@@ -118,5 +118,5 @@ export async function synthesize(
     schemaName: "prior_art_analysis",
   });
 
-  return assemble(plan, candidates, output);
+  return assemble(candidates, output);
 }

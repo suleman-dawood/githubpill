@@ -4,6 +4,7 @@ export type {
   MatchLabel,
   ProgressEvent,
   ProgressHandler,
+  ProviderId,
   QueryPlan,
   RawHit,
   Report,
@@ -13,15 +14,25 @@ export type {
   Verification,
   VerdictBand,
 } from "./types.js";
+export { PROVIDER_IDS, SOURCE_IDS } from "./types.js";
 
-export { loadConfig, DEFAULT_MODEL } from "./config.js";
-export type { Config } from "./config.js";
+export { ConfigError, GithubPillError, HttpError, ProviderError, StructuredOutputError } from "./errors.js";
+export { createLogger, LOG_LEVELS } from "./logger.js";
+export type { Logger, LogLevel } from "./logger.js";
 
-export { defaultAdapters, ALL_SOURCES } from "./adapters/index.js";
+export { DEFAULT_MODELS, loadConfig } from "./config.js";
+export type { Config, LlmConfig } from "./config.js";
+
+export { createAdapters } from "./adapters/index.js";
 export type { SearchOptions, SourceAdapter } from "./adapters/index.js";
 
-export { AnthropicClient } from "./synthesis/llm.js";
-export type { LLMClient, StructuredRequest } from "./synthesis/llm.js";
+export {
+  AnthropicClient,
+  GeminiClient,
+  OpenAIClient,
+  createLLMClient,
+} from "./synthesis/providers/index.js";
+export type { LLMClient, ProviderOptions, StructuredRequest } from "./synthesis/providers/index.js";
 
 export { planQueries } from "./retrieval/query-plan.js";
 export { fanout } from "./retrieval/fanout.js";

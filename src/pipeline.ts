@@ -1,18 +1,19 @@
 import type { Candidate, ProgressHandler, Report } from "./types.js";
-import { loadConfig, type Config } from "./config.js";
-import { defaultAdapters, type SourceAdapter } from "./adapters/index.js";
+import type { Config } from "./config.js";
+import { createAdapters, type SourceAdapter } from "./adapters/index.js";
 import { planQueries } from "./retrieval/query-plan.js";
 import { fanout, type AdapterError } from "./retrieval/fanout.js";
 import { rankCandidates } from "./retrieval/rank.js";
 import { verifyCandidates } from "./verify/citations.js";
 import { synthesize } from "./synthesis/synthesize.js";
 import { deriveBand, headlineFor } from "./synthesis/verdict.js";
-import type { LLMClient } from "./synthesis/llm.js";
+import type { LLMClient } from "./synthesis/providers/types.js";
 
 export interface RunOptions {
   idea: string;
   llm: LLMClient;
-  config?: Config;
+  config: Config;
+  /** Defaults to the adapters for `config.sources`. Inject for tests. */
   adapters?: SourceAdapter[];
   onProgress?: ProgressHandler;
   signal?: AbortSignal;
@@ -32,8 +33,8 @@ export interface RunResult {
  */
 export async function run(options: RunOptions): Promise<RunResult> {
   const started = Date.now();
-  const config = options.config ?? loadConfig();
-  const adapters = options.adapters ?? defaultAdapters();
+  const { config } = options;
+  const adapters = options.adapters ?? createAdapters(config.sources);
   const progress = options.onProgress;
 
   progress?.({ type: "stage", stage: "plan" });
