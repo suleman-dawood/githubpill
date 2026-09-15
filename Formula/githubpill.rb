@@ -10,7 +10,7 @@ class Githubpill < Formula
   desc "Prior-art reconnaissance for project ideas"
   homepage "https://github.com/suleman-dawood/githubpill"
   url "https://registry.npmjs.org/githubpill/-/githubpill-1.0.0.tgz"
-  sha256 "1403b0ce3b0859dcb385c0fc0181b5ad043148f73beee02a66a37cb4f54267d6"
+  sha256 "a46277f8848d221e21fccedb3a8cbb865caf438a7ff3d7392c2454ea176b4578"
   license "MIT"
 
   depends_on "node"
