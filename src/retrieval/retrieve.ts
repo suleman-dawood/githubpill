@@ -1,14 +1,17 @@
 import type { Candidate, ProgressHandler, QueryPlan, SourceRun } from "../types.js";
 import type { Config } from "../config.js";
 import { createAdapters, type SourceAdapter } from "../adapters/index.js";
-import { planQueries } from "./query-plan.js";
+import { planQueries, planQueriesWithLlm } from "./query-plan.js";
 import { fanout, type AdapterError } from "./fanout.js";
 import { rankCandidates } from "./rank.js";
 import { verifyCandidates } from "../verify/citations.js";
+import type { LLMClient } from "../synthesis/providers/types.js";
 
 export interface RetrieveOptions {
   idea: string;
   config: Config;
+  /** When present (and enabled in config), queries are LLM-generated. */
+  llm?: LLMClient;
   /** Defaults to the adapters for `config.sources`. Inject for tests. */
   adapters?: SourceAdapter[];
   onProgress?: ProgressHandler;
@@ -35,7 +38,10 @@ export async function retrieve(options: RetrieveOptions): Promise<Retrieval> {
   const progress = options.onProgress;
 
   progress?.({ type: "stage", stage: "plan" });
-  const plan = planQueries(options.idea);
+  const plan =
+    options.llm && config.llmQueries
+      ? await planQueriesWithLlm(options.idea, options.llm)
+      : planQueries(options.idea);
 
   progress?.({ type: "stage", stage: "search" });
   const { hits, runs, errors } = await fanout(adapters, plan, config, progress, options.signal);

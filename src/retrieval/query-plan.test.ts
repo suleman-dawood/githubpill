@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractPreservedTerms, extractProductNames, planQueries } from "./query-plan.js";
+import { extractPreservedTerms, extractProductNames, planQueries, planQueriesWithLlm } from "./query-plan.js";
+import { FakeLLM } from "../testing/fakes.js";
 
 describe("planQueries", () => {
   it("preserves acronyms and hyphenated jargon", () => {
@@ -32,5 +33,30 @@ describe("planQueries", () => {
   it("truncates the sharpened sentence", () => {
     const plan = planQueries(`${"word ".repeat(100)}end`);
     expect(plan.sharpened.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("planQueriesWithLlm", () => {
+  it("uses the model plan and keeps heuristic preserved terms", async () => {
+    const llm = new FakeLLM({
+      query_plan: {
+        sharpened: "An NDIS invoice validator",
+        keywords: ["ndis invoice checker"],
+        productNames: ["SomeProduct"],
+        topics: ["ndis"],
+        preservedTerms: [],
+      },
+    });
+
+    const plan = await planQueriesWithLlm("An NDIS invoice validator for providers", llm);
+
+    expect(plan.keywords).toEqual(["ndis invoice checker"]);
+    expect(plan.productNames).toEqual(["SomeProduct"]);
+    expect(plan.preservedTerms).toContain("NDIS");
+  });
+
+  it("falls back to the heuristic when the model fails", async () => {
+    const plan = await planQueriesWithLlm("a todo cli", new FakeLLM());
+    expect(plan.keywords.length).toBeGreaterThan(0);
   });
 });

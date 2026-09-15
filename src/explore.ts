@@ -33,6 +33,7 @@ export async function explore(options: ExploreOptions): Promise<ExploreResult> {
   const retrieval = await retrieve({
     idea: options.topic,
     config: options.config,
+    llm: options.llm,
     adapters: options.adapters,
     onProgress: progress,
     signal: options.signal,

@@ -35,6 +35,7 @@ export type { SearchOptions, SourceAdapter } from "./adapters/index.js";
 export {
   AnthropicClient,
   GeminiClient,
+  HostClient,
   OpenAICompatibleClient,
   createLLMClient,
 } from "./synthesis/providers/index.js";

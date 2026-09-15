@@ -91,9 +91,15 @@ whichever key is present, or set explicitly with `--provider` /
 | `openai` | `OPENAI_API_KEY` | `gpt-4o` |
 | `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
 | `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| `host` | none — uses an installed agentic CLI | — |
+
+If no API key is set, GithubPill falls back to the **`host`** provider and
+drives the agentic CLI already on your machine (`claude`, `opencode`, `codex`,
+or `pi`) to do the reasoning, so it works with **no API key**. Set
+`GITHUBPILL_AGENT` to choose one explicitly.
 
 ```bash
-export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY / GEMINI_API_KEY
+export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY / GEMINI_API_KEY / DEEPSEEK_API_KEY
 export GITHUB_TOKEN=...             # optional; raises GitHub rate limits
 ```
 
@@ -195,4 +201,4 @@ the Actions token to write, or you must pass a personal access token instead.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT License

@@ -9,6 +9,7 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   openai: "gpt-4o",
   gemini: "gemini-2.0-flash",
   deepseek: "deepseek-chat",
+  host: "host",
 };
 
 /** Env vars checked, in order, for each provider's API key. */
@@ -17,6 +18,7 @@ const API_KEY_ENV: Record<ProviderId, readonly string[]> = {
   openai: ["OPENAI_API_KEY"],
   gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
   deepseek: ["DEEPSEEK_API_KEY"],
+  host: [],
 };
 
 const BASE_URL_ENV: Record<ProviderId, string> = {
@@ -24,6 +26,7 @@ const BASE_URL_ENV: Record<ProviderId, string> = {
   openai: "OPENAI_BASE_URL",
   gemini: "GEMINI_BASE_URL",
   deepseek: "DEEPSEEK_BASE_URL",
+  host: "",
 };
 
 export interface LlmConfig {
@@ -31,6 +34,8 @@ export interface LlmConfig {
   apiKey: string;
   model: string;
   baseUrl?: string;
+  /** For the `host` provider: which agentic CLI to invoke. */
+  agent?: string;
   maxTokens: number;
   timeoutMs: number;
 }
@@ -45,6 +50,8 @@ export interface Config {
   concurrency: number;
   requestTimeoutMs: number;
   maxQueriesPerSource: number;
+  /** Generate search queries with the LLM instead of the heuristic planner. */
+  llmQueries: boolean;
   /** Deep mode: how many top candidates to clone and inspect. */
   deepCandidates: number;
   cloneTimeoutMs: number;
@@ -83,12 +90,9 @@ function resolveProvider(env: NodeJS.ProcessEnv): ProviderId {
     return requested as ProviderId;
   }
 
-  const detected = PROVIDER_IDS.find((provider) => apiKeyFor(env, provider));
-  if (!detected) {
-    const keys = PROVIDER_IDS.flatMap((provider) => API_KEY_ENV[provider]).join(", ");
-    throw new ConfigError(`No LLM API key found. Set one of: ${keys}.`);
-  }
-  return detected;
+  // Prefer a real API key; fall back to the host agent, which needs none.
+  const detected = PROVIDER_IDS.find((provider) => provider !== "host" && apiKeyFor(env, provider));
+  return detected ?? "host";
 }
 
 function resolveSources(env: NodeJS.ProcessEnv): SourceId[] {
@@ -128,8 +132,8 @@ export interface ConfigDeps {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDeps = {}): Config {
   const provider = resolveProvider(env);
-  const apiKey = apiKeyFor(env, provider);
-  if (!apiKey) {
+  const apiKey = apiKeyFor(env, provider) ?? "";
+  if (provider !== "host" && !apiKey) {
     throw new ConfigError(
       `Provider "${provider}" is selected but no API key is set. Set ${API_KEY_ENV[provider].join(" or ")}.`,
     );
@@ -163,6 +167,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
       maxTokens: limits.maxTokens,
       timeoutMs: limits.requestTimeoutMs,
       ...(env[BASE_URL_ENV[provider]] ? { baseUrl: env[BASE_URL_ENV[provider]] as string } : {}),
+      ...(env.GITHUBPILL_AGENT ? { agent: env.GITHUBPILL_AGENT } : {}),
     },
     sources: resolveSources(env),
     perSourceLimit: limits.perSourceLimit,
@@ -170,6 +175,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
     concurrency: limits.concurrency,
     requestTimeoutMs: limits.requestTimeoutMs,
     maxQueriesPerSource: limits.maxQueriesPerSource,
+    llmQueries: env.GITHUBPILL_LLM_QUERIES !== "0",
     deepCandidates: limits.deepCandidates,
     cloneTimeoutMs: limits.cloneTimeoutMs,
     deepMaxFiles: limits.deepMaxFiles,

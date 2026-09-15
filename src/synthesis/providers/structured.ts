@@ -66,6 +66,55 @@ export function parseStructuredText(text: string, provider: ProviderId): unknown
   }
 }
 
+function tryParse(text: string): unknown | undefined {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Pull the first JSON object out of text that may include ANSI codes, prose, or
+ * a fenced code block — agentic CLIs do not guarantee bare JSON on stdout.
+ */
+export function extractJson(text: string, provider: ProviderId): unknown {
+  const cleaned = text.replace(/\u001b\[[0-9;]*m/g, "").trim();
+
+  const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim();
+  const candidates = [fence, cleaned].filter((value): value is string => Boolean(value));
+  for (const candidate of candidates) {
+    const parsed = tryParse(candidate);
+    if (parsed !== undefined) return parsed;
+  }
+
+  const start = cleaned.indexOf("{");
+  if (start >= 0) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < cleaned.length; i += 1) {
+      const char = cleaned[i] as string;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === '"') inString = false;
+      } else if (char === '"') inString = true;
+      else if (char === "{") depth += 1;
+      else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          const parsed = tryParse(cleaned.slice(start, i + 1));
+          if (parsed !== undefined) return parsed;
+          break;
+        }
+      }
+    }
+  }
+
+  throw new StructuredOutputError("no JSON object found in the response", provider);
+}
+
 /**
  * Run an attempt, and retry it once if the model returned output that did not
  * match the schema. A second try usually fixes malformed JSON; auth and
