@@ -27,6 +27,15 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      - name: Verify the npm token is configured
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error title=Missing NPM_TOKEN::Add an npm Automation token as the NPM_TOKEN repository secret (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+
       - name: Publish to npm
         run: npm publish --provenance --access public
         env:
