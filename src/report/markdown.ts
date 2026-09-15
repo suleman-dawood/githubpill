@@ -53,6 +53,7 @@ export function renderMarkdown(report: Report): string {
     candidateCount === 0
       ? "_No candidate projects were retrieved._"
       : report.candidates.map(candidateBlock).join("\n\n"),
+    "",
     "## What's missing — your angle",
     "",
     report.yourAngle.summary,

@@ -25,6 +25,8 @@ export interface ValidateResult {
   errors: AdapterError[];
   /** Candidates that failed live verification and were dropped. */
   dropped: Candidate[];
+  /** Candidates kept but not confirmed (rate limit, server or network error). */
+  unverified: Candidate[];
 }
 
 /** Validate an idea: retrieve prior art, judge overlap, derive a verdict. */
@@ -63,15 +65,19 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
   }
 
   progress?.({ type: "stage", stage: "report" });
-  const band = deriveBand(candidates.map((candidate) => candidate.label));
+  // Lead with the closest matches: overlap first, then popularity.
+  const ranked = [...candidates].sort(
+    (a, b) => b.axisSum - a.axisSum || (b.stars ?? 0) - (a.stars ?? 0),
+  );
+  const band = deriveBand(ranked.map((candidate) => candidate.label));
   const report: Report = {
     idea: options.idea,
     sharpened: retrieval.plan.sharpened,
     preservedTerms: retrieval.plan.preservedTerms,
     band,
-    headline: headlineFor(band, candidates.length),
+    headline: headlineFor(band, ranked.length),
     summary: synthesis.summary,
-    candidates,
+    candidates: ranked,
     yourAngle: synthesis.yourAngle,
     sourceRuns: retrieval.runs,
     stats: {
@@ -79,9 +85,10 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
       queriesRun: retrieval.runs.length,
       hitsFound: retrieval.hitsFound,
       candidatesConsidered: retrieval.candidates.length,
-      candidatesReported: candidates.length,
+      candidatesReported: ranked.length,
       citationsChecked: retrieval.citationsChecked,
       citationsAlive: retrieval.citationsAlive,
+      citationsUnverified: retrieval.unverified.length,
       ...(clonesAttempted === undefined ? {} : { clonesAttempted, clonesSucceeded }),
     },
     depth: options.deep ? "deep" : "quick",
@@ -89,5 +96,5 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
   };
 
   progress?.({ type: "done", band });
-  return { report, errors: retrieval.errors, dropped: retrieval.dropped };
+  return { report, errors: retrieval.errors, dropped: retrieval.dropped, unverified: retrieval.unverified };
 }

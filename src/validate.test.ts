@@ -81,6 +81,55 @@ describe("validate", () => {
     expect(events).toContain("done");
   });
 
+  it("keeps candidates when verification is rate-limited", async () => {
+    const adapter = new FakeAdapter({ hits: [hit({ id: "a/b" })], verifyStatus: 403 });
+
+    const { report, unverified } = await validate({
+      idea: "a todo cli",
+      llm: llmFor("a/b"),
+      config: testConfig(),
+      adapters: [adapter],
+    });
+
+    expect(report.candidates).toHaveLength(1);
+    expect(unverified).toHaveLength(1);
+    expect(report.stats.citationsUnverified).toBe(1);
+  });
+
+  it("orders candidates by overlap, not retrieval rank", async () => {
+    // low/one wins retrieval (100 stars) but overlaps less; high/two must lead.
+    const adapter = new FakeAdapter({
+      hits: [hit({ id: "low/one", stars: 100 }), hit({ id: "high/two", stars: 1 })],
+    });
+    const llm = new FakeLLM({
+      prior_art_analysis: {
+        summary: "s",
+        candidates: [
+          {
+            candidateId: "low/one",
+            axisScores: { coreFunction: 1, targetAudience: 1, scope: 1, approach: 1, activity: 1 },
+            rationale: "low",
+          },
+          {
+            candidateId: "high/two",
+            axisScores: { coreFunction: 3, targetAudience: 3, scope: 3, approach: 2, activity: 3 },
+            rationale: "high",
+          },
+        ],
+        yourAngle: { summary: "y", missingFeatures: [] },
+      },
+    });
+
+    const { report } = await validate({
+      idea: "a todo cli",
+      llm,
+      config: testConfig(),
+      adapters: [adapter],
+    });
+
+    expect(report.candidates.map((candidate) => candidate.id)).toEqual(["high/two", "low/one"]);
+  });
+
   it("deep mode replaces the judgement with file evidence", async () => {
     const adapter = new FakeAdapter({ hits: [hit({ id: "a/b", description: "todo cli", stars: 10 })] });
     const llm = new FakeLLM({

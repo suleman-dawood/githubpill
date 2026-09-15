@@ -23,6 +23,7 @@ export interface Retrieval {
   hitsFound: number;
   errors: AdapterError[];
   dropped: Candidate[];
+  unverified: Candidate[];
   citationsChecked: number;
   citationsAlive: number;
 }
@@ -53,6 +54,7 @@ export async function retrieve(options: RetrieveOptions): Promise<Retrieval> {
     hitsFound: hits.length,
     errors,
     dropped: verified.dropped,
+    unverified: verified.unverified,
     citationsChecked: verified.checked,
     citationsAlive: verified.alive,
   };

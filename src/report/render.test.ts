@@ -40,7 +40,7 @@ describe("report renderers", () => {
     expect(markdown).toContain("🔴");
     expect(markdown).toContain("verified");
     expect(markdown).toContain("acme/diff");
-    expect(markdown).toContain("What's missing — your angle");
+    expect(markdown).toContain("\n\n## What's missing — your angle");
   });
 
   it("renders HTML and escapes upstream descriptions", async () => {

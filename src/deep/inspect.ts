@@ -161,8 +161,13 @@ export async function inspectCandidates(options: {
       });
       succeeded += 1;
       options.onProgress?.({ type: "inspect", candidateId: target.id, ok: true });
-    } catch {
-      options.onProgress?.({ type: "inspect", candidateId: target.id, ok: false });
+    } catch (error) {
+      options.onProgress?.({
+        type: "inspect",
+        candidateId: target.id,
+        ok: false,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

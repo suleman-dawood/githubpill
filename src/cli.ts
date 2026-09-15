@@ -160,11 +160,19 @@ function progressHandler(log: Logger): (event: ProgressEvent) => void {
       case "ranked":
         log.info(`  ranked ${event.count} candidates`);
         break;
-      case "verify":
-        log.info(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}`);
+      case "verify": {
+        const label = event.ok
+          ? "ok"
+          : event.status === 404 || event.status === 410
+            ? "gone"
+            : "unverified";
+        log.info(`  verify ${label} ${event.url}`);
         break;
+      }
       case "inspect":
-        log.info(`  inspect ${event.ok ? "ok" : "skipped"} ${event.candidateId}`);
+        log.info(
+          `  inspect ${event.ok ? "ok" : "skipped"} ${event.candidateId}${event.reason ? ` (${event.reason})` : ""}`,
+        );
         break;
       case "done":
         break;
@@ -226,8 +234,8 @@ async function main(): Promise<void> {
 
   if (mode === "explore") {
     if (values.deep) log.warn("[githubpill] --deep has no effect in explore mode");
-    const { report, errors, dropped } = await explore({ topic: subject, llm, config, adapters, onProgress });
-    reportWarnings(log, errors, dropped);
+    const { report, errors, dropped, unverified } = await explore({ topic: subject, llm, config, adapters, onProgress });
+    reportWarnings(log, errors, dropped, unverified);
     const base = `${report.generatedAt.slice(0, 10)}-explore-${slugify(report.sharpened)}`;
     const written = await writeReports(values.out, base, write, flags, {
       markdown: renderExplorationMarkdown(report),
@@ -238,7 +246,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { report, errors, dropped } = await validate({
+  const { report, errors, dropped, unverified } = await validate({
     idea: subject,
     llm,
     config,
@@ -246,7 +254,7 @@ async function main(): Promise<void> {
     onProgress,
     ...(values.deep ? { deep: {} } : {}),
   });
-  reportWarnings(log, errors, dropped);
+  reportWarnings(log, errors, dropped, unverified);
   const base = `${report.generatedAt.slice(0, 10)}-${slugify(report.sharpened)}`;
   const written = await writeReports(values.out, base, write, flags, {
     markdown: renderMarkdown(report),
@@ -260,6 +268,7 @@ function reportWarnings(
   log: Logger,
   errors: readonly { source: string; query: string; message: string }[],
   dropped: readonly unknown[],
+  unverified: readonly unknown[],
 ): void {
   if (errors.length > 0) {
     log.warn(`[githubpill] ${errors.length} query/queries failed and were skipped:`);
@@ -268,7 +277,12 @@ function reportWarnings(
     }
   }
   if (dropped.length > 0) {
-    log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that failed verification.`);
+    log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that no longer exist (404).`);
+  }
+  if (unverified.length > 0) {
+    log.warn(
+      `[githubpill] ${unverified.length} candidate(s) could not be verified (rate limit?) — kept as unverified.`,
+    );
   }
 }
 

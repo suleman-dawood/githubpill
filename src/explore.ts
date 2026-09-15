@@ -19,6 +19,7 @@ export interface ExploreResult {
   report: ExplorationReport;
   errors: AdapterError[];
   dropped: Candidate[];
+  unverified: Candidate[];
 }
 
 /** Explore a space: retrieve the field, cluster it, and surface gaps and directions. */
@@ -60,10 +61,11 @@ export async function explore(options: ExploreOptions): Promise<ExploreResult> {
       candidatesReported: synthesis.candidates.length,
       citationsChecked: retrieval.citationsChecked,
       citationsAlive: retrieval.citationsAlive,
+      citationsUnverified: retrieval.unverified.length,
     },
     generatedAt: new Date().toISOString(),
   };
 
   progress?.({ type: "done" });
-  return { report, errors: retrieval.errors, dropped: retrieval.dropped };
+  return { report, errors: retrieval.errors, dropped: retrieval.dropped, unverified: retrieval.unverified };
 }
