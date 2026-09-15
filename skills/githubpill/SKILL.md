@@ -29,6 +29,7 @@ Useful flags:
 
 | Flag | Effect |
 |---|---|
+| `--provider <id>` | LLM provider: `anthropic`, `openai`, or `gemini` |
 | `--json` / `--html` | also write machine-readable / self-contained HTML reports |
 | `--out <dir>` | output directory (default `githubpill-reports`) |
 | `--sources github,npm,pypi,hackernews` | restrict which sources are searched |
@@ -37,7 +38,9 @@ Useful flags:
 
 ## Requirements
 
-- `ANTHROPIC_API_KEY` — required for the synthesis step.
+- One LLM API key — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
+  `GEMINI_API_KEY` / `GOOGLE_API_KEY`. The provider is auto-detected from
+  whichever key is present, or set with `--provider`.
 - `GITHUB_TOKEN` or `GH_TOKEN` — optional; raises GitHub rate limits. Falls back to `gh auth token`.
 - Node.js ≥ 20.
 

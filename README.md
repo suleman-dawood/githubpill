@@ -45,10 +45,11 @@ flowchart LR
   concurrency, isolates per-query failures, then dedupes by canonical URL and
   ranks by how many independent searches surfaced each candidate.
 - **Synthesis** (`src/synthesis/`) sends the candidates to an LLM and gets
-  back axis scores plus rationale, validated against a Zod schema. The LLM
-  never emits a verdict label: labels and the overall band are derived
-  mechanically from the scores, so identical scores always give identical
-  verdicts.
+  back axis scores plus rationale, validated against a Zod schema. Providers
+  are strategies behind one `LLMClient` interface (Anthropic, OpenAI, Gemini),
+  built by a factory from validated config. The LLM never emits a verdict
+  label: labels and the overall band are derived mechanically from the scores,
+  so identical scores always give identical verdicts.
 - **Verification** (`src/verify/`) re-checks every candidate live and drops the
   ones that fail — the citation-integrity gate.
 - **Reports** (`src/report/`) render JSON, Markdown, and a self-contained HTML
@@ -60,16 +61,25 @@ flowchart LR
 npm install -g githubpill
 ```
 
-Requires Node ≥ 20 and an LLM key:
+Requires Node ≥ 20 and one LLM API key. The provider is auto-detected from
+whichever key is present, or set explicitly with `--provider` /
+`GITHUBPILL_PROVIDER`:
+
+| Provider | API key env | Default model |
+|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` |
+| `openai` | `OPENAI_API_KEY` | `gpt-4o` |
+| `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
 
 ```bash
-export ANTHROPIC_API_KEY=...        # required for synthesis
+export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY / GEMINI_API_KEY
 export GITHUB_TOKEN=...             # optional; raises GitHub rate limits
 ```
 
-Without `GITHUB_TOKEN`, GithubPill falls back to your `gh auth token`. The
-GitHub search API is heavily rate-limited when anonymous, so a token is
-strongly recommended.
+A `*_BASE_URL` variable per provider (e.g. `OPENAI_BASE_URL`) points the client
+at a gateway or proxy. Without `GITHUB_TOKEN`, GithubPill falls back to your
+`gh auth token`; the GitHub search API is heavily rate-limited when anonymous,
+so a token is strongly recommended.
 
 ## Use
 
@@ -79,6 +89,7 @@ githubpill "a CLI that previews diffs as a side-by-side TUI"
 
 ```bash
 githubpill --json --html "a self-hosted RSS reader"   # extra report formats
+githubpill --provider openai "a dotfiles manager"     # pick the LLM provider
 githubpill --sources github,npm "a dotfiles manager"  # restrict sources
 githubpill --out ./recon "an NDIS invoice validator"  # output directory
 ```

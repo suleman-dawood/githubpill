@@ -18,9 +18,14 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 |---|---|
 | `src/adapters/` | Source adapters (GitHub, npm, PyPI, Hacker News) behind one interface |
 | `src/retrieval/` | Query planning, fan-out, dedupe, ranking |
-| `src/synthesis/` | LLM client, Zod schemas, prompt, mechanical verdict derivation |
+| `src/synthesis/` | Prompt, Zod schemas, mechanical verdict derivation |
+| `src/synthesis/providers/` | LLM providers behind `LLMClient` (Anthropic, OpenAI, Gemini) + factory |
 | `src/verify/` | Live citation-integrity gate |
 | `src/report/` | JSON, Markdown, and HTML renderers |
+| `src/config.ts` | Env -> validated `Config` (provider, keys, sources, limits) |
+| `src/errors.ts` | Typed error hierarchy |
+| `src/logger.ts` | Leveled logger |
+| `src/testing/` | Test doubles (fake adapters/LLM, mock HTTP server) — not shipped |
 | `src/pipeline.ts` | Orchestrates the stages; `src/cli.ts` is the entry point |
 | `skills/githubpill/` | The Agent Skills wrapper over the CLI |
 | `.claude-plugin/` | Claude Code marketplace manifest |
@@ -45,15 +50,21 @@ Tests never touch the network or an LLM — adapters are exercised with a mocked
 
 - **Adapters are the only source-specific code.** Adding a source means
   implementing `SourceAdapter` (`search` + `verify`) in `src/adapters/` and
-  registering it in `src/adapters/index.ts`. Nothing in `retrieval/`,
-  `synthesis/`, or `report/` should learn about a specific source.
+  adding one entry to the registry in `src/adapters/index.ts`. Nothing in
+  `retrieval/`, `synthesis/`, or `report/` should learn about a specific source.
+- **Providers are strategies behind `LLMClient`.** A new provider subclasses
+  `BaseLLMClient` and implements `send`; the base class owns validation and the
+  retry policy. Register it in `src/synthesis/providers/index.ts`. No
+  provider-specific branching anywhere else.
 - **Verdict labels are derived mechanically** from axis scores in
   `src/synthesis/verdict.ts`. The LLM emits axis scores and rationale only —
   never a label, never a band. Do not move that logic into the prompt.
 - **Verification is a gate, not a decoration.** A candidate that fails
   `verify` is dropped before synthesis. Do not render unverified URLs.
-- **One LLM provider behind `LLMClient`.** Do not add provider-specific
-  branching outside `src/synthesis/llm.ts`.
+- **Validate at the boundary.** Env is parsed with Zod in `src/config.ts`;
+  model output is parsed with Zod in the providers. Internal code trusts types.
+- **Throw typed errors.** Subclasses of `GithubPillError` (`ConfigError`,
+  `HttpError`, `ProviderError`, `StructuredOutputError`) — never bare strings.
 - **The skill stays a wrapper.** `skills/githubpill/SKILL.md` describes how to
   call the CLI; protocol logic belongs in `src/`.
 
