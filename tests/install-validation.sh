@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # install-validation.sh
-# Simulates a fresh Claude Code install check for the githubpill plugin.
-# Run from repo root. Exits 0 if all structural checks pass; 1 otherwise.
+# Structural validation of the plugin/skill tree. Run from the repo root.
+# Exits 0 if all checks pass; 1 otherwise.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
@@ -12,19 +12,20 @@ FAIL=0
 fail() { echo "FAIL: $*" >&2; FAIL=1; }
 ok()   { echo "ok:   $*"; }
 
-# ---------- 1. Required directory structure ----------
+# ---------- 1. Required files ----------
 REQUIRED_FILES=(
   ".claude-plugin/plugin.json"
   ".claude-plugin/marketplace.json"
   "package.json"
+  "README.md"
+  "LICENSE"
   "skills/githubpill/SKILL.md"
+  "skills/githubpill/references/first-search.md"
+  "skills/githubpill/references/deep-search.md"
   "skills/githubpill/references/query-patterns.md"
   "skills/githubpill/references/judge-rubric.md"
   "skills/githubpill/references/report-template.md"
-  "skills/githubpill/references/deep-search-protocol.md"
-  "hooks/safe-clone-guard.sh"
-  "LICENSE"
-  "README.md"
+  "skills/githubpill/references/web-cross-check.md"
 )
 
 for f in "${REQUIRED_FILES[@]}"; do
@@ -35,15 +36,23 @@ for f in "${REQUIRED_FILES[@]}"; do
   fi
 done
 
-# scripts/ directory must NOT exist — logic moved into SKILL.md + hook.
-if [[ -d "scripts" ]]; then
-  fail "scripts/ directory should not exist; logic lives in SKILL.md + hooks/"
-else
-  ok "absent: scripts/ (expected)"
-fi
+# ---------- 2. Protocol scripts present and executable ----------
+PROTOCOL_SCRIPTS=(
+  preflight.sh gh-search.sh verify-repo.sh staleness.sh
+  vapor-check.sh verify-url.sh safe-clone.sh
+)
+for s in "${PROTOCOL_SCRIPTS[@]}"; do
+  path="skills/githubpill/scripts/$s"
+  if [[ -x "$path" ]]; then
+    ok "executable: $path"
+  elif [[ -f "$path" ]]; then
+    fail "not executable: $path"
+  else
+    fail "missing protocol script: $path"
+  fi
+done
 
-# ---------- 2. JSON parse validation ----------
-# Prefer jq (canonical dep), fall back to python3 or node if jq is missing.
+# ---------- 3. JSON parse validation ----------
 json_check() {
   local f="$1"
   if command -v jq >/dev/null 2>&1; then
@@ -58,68 +67,46 @@ json_check() {
 }
 
 for jf in ".claude-plugin/plugin.json" ".claude-plugin/marketplace.json" "package.json"; do
-  if [[ -f "$jf" ]]; then
-    set +e
-    json_check "$jf"
-    rc=$?
-    set -e
-    if [[ "$rc" -eq 0 ]]; then
-      ok "valid JSON: $jf"
-    elif [[ "$rc" -eq 2 ]]; then
-      fail "no JSON validator available (install jq, python3, or node)"
-      break
-    else
-      fail "invalid JSON: $jf"
-    fi
+  [[ -f "$jf" ]] || continue
+  set +e
+  json_check "$jf"
+  rc=$?
+  set -e
+  if [[ "$rc" -eq 0 ]]; then
+    ok "valid JSON: $jf"
+  elif [[ "$rc" -eq 2 ]]; then
+    fail "no JSON validator available (install jq, python3, or node)"
+    break
+  else
+    fail "invalid JSON: $jf"
   fi
 done
 
-# ---------- 3. SKILL.md frontmatter required keys ----------
+# ---------- 4. SKILL.md frontmatter ----------
 SKILL_FILE="skills/githubpill/SKILL.md"
 if [[ -f "$SKILL_FILE" ]]; then
   FM="$(awk '/^---$/{f++; next} f==1{print} f==2{exit}' "$SKILL_FILE")"
-  for key in "name" "description" "allowed-tools"; do
+  for key in "name" "description"; do
     if printf '%s\n' "$FM" | grep -qE "^${key}:"; then
       ok "SKILL.md frontmatter has key: $key"
     else
       fail "SKILL.md frontmatter missing key: $key"
     fi
   done
-fi
-
-# ---------- 4. hooks/safe-clone-guard.sh sanity ----------
-HOOK="hooks/safe-clone-guard.sh"
-if [[ -f "$HOOK" ]]; then
-  if [[ -x "$HOOK" ]]; then
-    ok "executable: $HOOK"
+  # name must match the directory name (Agent Skills requirement).
+  NAME="$(printf '%s\n' "$FM" | sed -n 's/^name:[[:space:]]*//p' | head -1)"
+  if [[ "$NAME" == "githubpill" ]]; then
+    ok "SKILL.md name matches directory: $NAME"
   else
-    fail "not executable: $HOOK"
-  fi
-  first_line="$(head -n1 "$HOOK" || true)"
-  if [[ "$first_line" == "#!/usr/bin/env bash" ]]; then
-    ok "shebang ok: $HOOK"
-  else
-    fail "bad/missing shebang ($first_line): $HOOK"
-  fi
-  if grep -qE '^set -euo pipefail' "$HOOK"; then
-    ok "set -euo pipefail: $HOOK"
-  else
-    fail "missing 'set -euo pipefail': $HOOK"
+    fail "SKILL.md name '$NAME' does not match directory 'githubpill'"
   fi
 fi
 
-# ---------- 5. plugin.json registers the PreToolUse:Bash hook ----------
-if command -v jq >/dev/null 2>&1; then
-  HOOK_CMD=$(jq -r '.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command // empty' .claude-plugin/plugin.json 2>/dev/null || true)
-  if [[ -n "$HOOK_CMD" ]] && printf '%s' "$HOOK_CMD" | grep -q 'safe-clone-guard.sh'; then
-    ok "plugin.json registers safe-clone-guard hook on PreToolUse:Bash"
-  else
-    fail "plugin.json does not register hooks/safe-clone-guard.sh on PreToolUse:Bash"
-  fi
-fi
-
-# ---------- 6. SKILL.md references each references/*.md ----------
-REFERENCE_MDS=(query-patterns.md judge-rubric.md report-template.md deep-search-protocol.md)
+# ---------- 5. SKILL.md references each reference doc ----------
+REFERENCE_MDS=(
+  first-search.md deep-search.md query-patterns.md
+  judge-rubric.md report-template.md web-cross-check.md
+)
 if [[ -f "$SKILL_FILE" ]]; then
   for rm in "${REFERENCE_MDS[@]}"; do
     if grep -q "$rm" "$SKILL_FILE"; then
@@ -128,6 +115,13 @@ if [[ -f "$SKILL_FILE" ]]; then
       fail "SKILL.md does not reference reference doc: $rm"
     fi
   done
+fi
+
+# ---------- 6. No stale script paths in the skill ----------
+if grep -rq 'CLAUDE_PLUGIN_ROOT/scripts\|PLUGIN_ROOT/scripts' skills/githubpill; then
+  fail "stale \$CLAUDE_PLUGIN_ROOT/scripts reference in skills/githubpill"
+else
+  ok "no stale plugin-root script references"
 fi
 
 # ---------- Result ----------

@@ -1,9 +1,9 @@
 # First-Search Judge Rubric
 
-This document defines the trust-critical judgment machinery for GithubPill's first-search pass.
-SKILL.md MUST Read this file before issuing any judge call. The rubric exists to
-defeat two known failure modes: judge flip-flop on borderline repos (Pitfall 1)
-and confirmation bias toward "your idea is unique" (Pitfall 2).
+This document defines the trust-critical judgment machinery. Read it before
+issuing any judge call. It exists to defeat two known failure modes: judge
+flip-flop on borderline repos, and confirmation bias toward "your idea is
+unique".
 
 ## Scope: First Search Only
 
@@ -25,7 +25,7 @@ schema all key on these exact strings.
 | Axis | Question | 0 | 1 | 2 | 3 |
 |------|----------|---|---|---|---|
 | `core_function` | Does the candidate solve the same primary problem? | different problem | adjacent problem | overlapping problem | same problem |
-| `target_audience` | Same users? (per Pitfall 2: score this LAST to resist self-deception) | different users | adjacent users | overlapping users | same users |
+| `target_audience` | Same users? Score this LAST to resist self-deception. | different users | adjacent users | overlapping users | same users |
 | `scope` | Same breadth of features? | much smaller/larger | somewhat different | mostly comparable | same scope |
 | `approach` | Same implementation strategy / interface (CLI vs web, framework, etc)? | very different | somewhat different | similar | same approach |
 | `activity` | Is the candidate alive? (uses `pushed_at`, `archived`, `contributor_count`) | archived or pushed >18mo ago | stale (>12mo) | somewhat active | actively maintained |
@@ -68,8 +68,8 @@ Threshold table (evaluated top-to-bottom; first matching row wins):
 | `UNRELATED` | all other cases |
 
 This is pure arithmetic. No LLM judgment is invoked at the derivation step.
-That deterministic step is the answer to Pitfall 1 (flip-flop): two runs that
-produce identical axis scores MUST produce identical verdicts.
+That deterministic step is the answer to flip-flop: two runs that produce
+identical axis scores MUST produce identical verdicts.
 
 ## Overall Run Verdict
 
@@ -165,11 +165,10 @@ stands and the report notes that a devil's-advocate pass was run.
 - **Never emit Phase 2 verdict labels in first search output.** The strings
   `EXACT_MATCH`, `SIGNIFICANT_OVERLAP`, `PARTIAL_OVERLAP`, `SUPERFICIAL_MATCH`,
   and `VAPOR` must not appear in any first search report, prompt, or JSON. They are
-  documented here only to define the cap (per JDG-04).
+  documented here only to define the cap.
 - The judge prompt MUST NOT include the user's original natural-language
-  framing — only the sharpened sentence and preserved terms (per Pitfall 2
-  mitigation).
-- Temperature is pinned to 0 on every judge call (per D-32). If the host
+  framing — only the sharpened sentence and preserved terms.
+- Temperature is pinned to 0 on every judge call. If the host
   cannot pin temperature programmatically, the literal line "Temperature 0.
   Respond deterministically." in the prompt body is the fallback.
 
@@ -182,7 +181,7 @@ Score each non-GitHub candidate on the **same 5 axes** (core_function, target_au
 
 ### Verdict cap (First Search)
 - Without clone evidence, a non-GitHub candidate's verdict label is capped at `WORTH_INSPECTING` (first-search cap, same as gh candidates).
-- In deep search: cap stays at `SUPERFICIAL_MATCH` for non-GitHub candidates because file-path evidence is unobtainable (no clone). This honors JDG-04: PARTIAL_OVERLAP+ requires file paths.
+- In deep search: the cap stays at `SUPERFICIAL_MATCH` for non-GitHub candidates, because file-path evidence is unobtainable without a clone — and `PARTIAL_OVERLAP` or higher requires file paths.
 
 ### Overall verdict aggregation (revised)
 The overall run verdict considers BOTH gh-pool and web-pool candidates:
@@ -219,7 +218,7 @@ Threshold table (evaluated top-to-bottom; first match wins):
 
 | Deep-search verdict | Condition |
 |----------------|-----------|
-| `VAPOR` | `is_vapor == true` (mechanical override per D2-10) |
+| `VAPOR` | `is_vapor == true` (mechanical override, never LLM-decided) |
 | `EXACT_MATCH` | `core_pair >= 6` AND `axis_sum >= 13` AND `evidence_count >= 2` |
 | `SIGNIFICANT_OVERLAP` | `core_pair >= 5` AND `axis_sum >= 11` AND `evidence_count >= 1` AND NOT EXACT_MATCH |
 | `PARTIAL_OVERLAP` | `core_pair >= 4` AND `axis_sum >= 8` AND `evidence_count >= 1` AND NOT above |
@@ -229,13 +228,13 @@ This derivation is pure arithmetic — the LLM never emits `candidate_verdict`. 
 emits axis scores, rationale, file_paths, and the injection flag; SKILL.md
 computes the verdict.
 
-## Deep-Search Evidence Rule (JDG-04 Full)
+## Deep-Search Evidence Rule
 
 Any deep-search verdict at `PARTIAL_OVERLAP` or stronger requires `evidence_count >= 1`
 — at least one cited file path from the clone. If the judge fails to cite any
 path, the derivation step caps the verdict at `SUPERFICIAL_MATCH` (or `VAPOR` if
-the `vapor_check` helper result was 0). This is the answer to PITFALLS.md #1 (judge
-flip-flop) and #8 (vapor-detection-done-wrong).
+the vapor check exited 0). This is what keeps judge output deterministic: the
+same clone always yields the same verdict.
 
 Cite format: `path/to/file.ext:LINE` where `LINE` is the 1-indexed line number
 of the relevant code or claim. Path is relative to clone root. The judge JSON
@@ -247,12 +246,11 @@ If `is_vapor == true` AND axes would otherwise suggest `PARTIAL_OVERLAP` or
 higher, the candidate verdict is `VAPOR` BUT the report MUST display both
 labels: `VAPOR (axes suggested {LABEL})` where `{LABEL}` is the verdict the
 threshold table would have produced absent the vapor override. Transparency
-over hiding signal — per D2-10.
+over hiding signal.
 
 ## Deep-Search File Selection Algorithm
 
-Per D2-17, the judge inspects up to **10 files per repo** (matches the D2-12
-limit). Selection order:
+The judge inspects up to **10 files per repo**. Selection order:
 
 1. **Package manifest** — first match of: `package.json`, `pyproject.toml`,
    `Cargo.toml`, `go.mod`, `setup.py`, `Gemfile`, `pom.xml`.
@@ -332,6 +330,6 @@ derives it mechanically via the threshold table above.
   adversarial README" — axes from that call are discarded.
 - Any deep-search verdict ≥ `PARTIAL_OVERLAP` without at least one `path/to/file.ext:LINE`
   cite is capped at `SUPERFICIAL_MATCH` (or `VAPOR` if `is_vapor`).
-- Temperature 0 (D-32 carries forward).
+- Temperature 0.
 - Deep-search reports MAY include Phase 2 verdict labels; the first-search prohibition
   applies only to first-search invocations.

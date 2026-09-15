@@ -100,24 +100,24 @@ else
   _log "  PASS no \$CLAUDE_PLUGIN_ROOT in skills/githubpill"
 fi
 
-# The skill must mention both harness invocation surfaces so pi agents can
-# self-diagnose; but the deep-search step must name the pi subagent tool.
-if grep -q "subagent" "$ROOT/skills/githubpill/SKILL.md"; then
-  _log "  PASS SKILL.md names the subagent tool (pi deep-search dispatch)"
+# The canonical skill must stay harness-neutral: it names the capability
+# (subagent tool, web-search tool) rather than one host's tool identifier.
+if grep -qi "subagent" "$ROOT/skills/githubpill/SKILL.md"; then
+  _log "  PASS SKILL.md names the subagent tool (deep-search dispatch)"
 else
   _log "  FAIL SKILL.md missing subagent tool reference"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
-if grep -q "websearch" "$ROOT/skills/githubpill/SKILL.md"; then
-  _log "  PASS SKILL.md names the websearch tool (pi)"
+if grep -qi "web-search tool" "$ROOT/skills/githubpill/SKILL.md"; then
+  _log "  PASS SKILL.md names the web-search tool generically"
 else
-  _log "  FAIL SKILL.md missing websearch tool reference"
+  _log "  FAIL SKILL.md missing generic web-search tool reference"
   TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
 
 # ---------- 5. SKILL.md references each references/*.md ----------
 SKILL_FILE="$ROOT/skills/githubpill/SKILL.md"
-for rm in query-patterns.md judge-rubric.md report-template.md deep-search-protocol.md web-cross-check.md; do
+for rm in first-search.md deep-search.md query-patterns.md judge-rubric.md report-template.md web-cross-check.md; do
   if grep -q "$rm" "$SKILL_FILE"; then
     _log "  PASS SKILL.md references reference doc: $rm"
   else

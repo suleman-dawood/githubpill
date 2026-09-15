@@ -2,7 +2,7 @@
 
 **Purpose.** Catch competitors that don't appear in `gh api search/repositories` — closed-source SaaS, YC startups, GitHub Apps, GitHub Marketplace Actions, well-known products buried in awesome-list curations.
 
-This protocol runs ONCE in first search immediately after the gh-search discovery step. It is NOT optional. Skipping it reintroduces the v0.1.0 blind spot.
+This protocol runs once per first search, immediately after gh-search discovery. It is not optional: skipping it reintroduces the closed-source blind spot that produces false 🟢 verdicts on saturated lanes.
 
 ## Inputs
 - Sharpened sentence
@@ -20,12 +20,12 @@ A JSON array of `web_candidate` objects:
   "category": "closed-source-saas | yc-company | github-app | github-marketplace | awesome-list-entry | hn-launch | product-hunt | other",
   "evidence_snippet": "<≤200 chars from the web-search result that supports the claim>",
   "source_query": "<the web-search query that surfaced it>",
-  "http_code": "<3-digit HTTP status from verify-url.sh, REQUIRED for first-web-saas candidates>",
+  "http_code": "<3-digit HTTP status from scripts/verify-url.sh, REQUIRED for first-web-saas candidates>",
   "final_url": "<URL after redirect chain — surface in report if it differs from the original url>"
 }
 ```
 
-Candidates whose URL is a `github.com/<owner>/<repo>` link MUST be additionally verified via the `gh_verify_repo` helper (defined in SKILL.md) and merged into the gh-candidate pool (provenance: "first-web" rather than first-gh).
+Candidates whose URL is a `github.com/<owner>/<repo>` link MUST additionally be verified via `scripts/verify-repo.sh` and merged into the gh-candidate pool (provenance: `first-web` rather than `first-gh`).
 
 ## Required searches (5 queries, single batch)
 
@@ -73,14 +73,14 @@ For each web-search result:
 ## Verification
 
 For each candidate URL:
-- If it's a `github.com/<owner>/<repo>` URL → run the `gh_verify_repo` helper (defined in SKILL.md) on it. 404 = drop. Otherwise merge into the gh-candidate pool with `provenance=first-web`.
-- If it's a non-GitHub URL (SaaS landing page, YC profile, etc.) → it counts as a `web_candidate` with `provenance=first-web-saas`. Do NOT cite this URL in the report header without `verified_at` from a successful web-search result; treat as "found-not-verified-equivalence".
+- `github.com/<owner>/<repo>` → run `scripts/verify-repo.sh`. 404 = drop; otherwise merge into the gh-candidate pool with `provenance=first-web`.
+- non-GitHub URL (SaaS landing page, YC profile, …) → run `scripts/verify-url.sh` and keep the result as a `web_candidate` with `provenance=first-web-saas`. A URL only appears in the report with the `checked_at` timestamp from that successful check.
 
-### Non-GitHub URL verification (v0.3.0)
+### Non-GitHub URL verification
 
 For each `web_candidate.url` that is NOT `github.com/...`:
 
-1. Run the `verify_url` helper (defined in SKILL.md) with the URL.
+1. Run `scripts/verify-url.sh "<url>"`.
 2. On exit 0: tag `provenance=first-web-saas`, attach the returned JSON
    (`http_code`, `final_url`, `checked_at`). Keep in the SaaS pool.
 3. On exit 20/21/22/23: DROP the candidate entirely. Log the drop reason in
@@ -92,9 +92,9 @@ This catches hallucinated SaaS competitors from web-search SEO spam. Without
 this gate, a model-fabricated landing-page URL could leak into the report
 unverified.
 
-## Why this is mandatory in first search, not deep search
+## Why this belongs in first search, not deep search
 
-The closed-source case is the **dominant** failure mode for the v0.1.0 protocol. Holding it back behind deep search opt-in meant 🟢 verdicts on already-saturated lanes (Idea 2 in user testing: Ellipsis, CodeRabbit Autofix, Sweep, Greptile all missed). deep search stays for clone-inspection depth; web cross-check is breadth.
+Closed-source competition is the dominant miss pattern: a saturated lane can have zero matching GitHub repos while several funded SaaS products serve it. Deferring this check to deep search meant 🟢 verdicts on lanes that were already crowded. Keep the split: web cross-check is breadth, deep search is clone-inspection depth.
 
 ## Output Discipline
 

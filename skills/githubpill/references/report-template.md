@@ -1,7 +1,7 @@
 # First-Search Report Template
 
-This reference is loaded on-demand by `skills/githubpill/SKILL.md` during the
-**emit report** step (Step 7) of the first search protocol.
+Loaded on-demand during the report step (Step 8) of the first-search protocol
+and during the deep-search report rewrite.
 
 **Output path:** `./githubpill-reports/YYYY-MM-DD-<slug>.md`
 
@@ -79,16 +79,7 @@ prose. Metadata is collapsed behind `<details>`.
 {{DEEP_SEARCH_FOOTER}}
 ```
 
-**Required placeholders (verbatim):**
-
-`{{VERDICT_BADGE}}`, `{{VERDICT_HEADLINE}}`, `{{SHARPENED_STATEMENT}}`,
-`{{NARRATIVE_LEAD}}`, `{{CANDIDATE_NARRATIVE_BLOCKS}}`,
-`{{YOUR_ANGLE_NARRATIVE}}`, `{{SAAS_COMPETITORS_BLOCK}}`, `{{RUN_TIMESTAMP}}`,
-`{{RATE_BUDGET_CORE_BEFORE}}`, `{{RATE_BUDGET_SEARCH_BEFORE}}`,
-`{{RATE_BUDGET_CORE_AFTER}}`, `{{RATE_BUDGET_SEARCH_AFTER}}`,
-`{{PRESERVED_TERMS}}`, `{{PROVENANCE_SUMMARY}}`, `{{DEEP_SEARCH_FOOTER}}`.
-
-**Rules for new narrative placeholders:**
+**Placeholder rules:**
 
 - `{{VERDICT_HEADLINE}}` is a human-readable one-line summary (see Verdict
   Badge Rules below). Always sentence-case prose; never a JSON-ish label.
@@ -109,7 +100,7 @@ prose. Metadata is collapsed behind `<details>`.
 ## Per-Candidate Block Template (first search)
 
 For each verified candidate, substitute this block and concatenate into
-`{{CANDIDATE_NARRATIVE_BLOCKS}}` (separated by a blank line). Per D-25.
+`{{CANDIDATE_NARRATIVE_BLOCKS}}` (separated by a blank line).
 
 ```markdown
 ### {{CAND_NAME}} — {{CAND_VERDICT}}
@@ -123,21 +114,12 @@ For each verified candidate, substitute this block and concatenate into
 **Axis scores:** core_function={{CAND_AXIS_CORE_FUNCTION}} target_audience={{CAND_AXIS_TARGET_AUDIENCE}} scope={{CAND_AXIS_SCOPE}} approach={{CAND_AXIS_APPROACH}} activity={{CAND_AXIS_ACTIVITY}} (sum={{CAND_AXIS_SUM}})
 ```
 
-**Required per-candidate placeholders (verbatim):**
-
-`{{CAND_NAME}}`, `{{CAND_URL}}`, `{{CAND_VERIFIED_AT}}`,
-`{{CAND_STALENESS_SUFFIX}}`, `{{CAND_VERDICT}}`,
-`{{CAND_DESCRIPTION_NARRATIVE}}`, `{{CAND_OVERLAP_NARRATIVE}}`,
-`{{CAND_AXIS_CORE_FUNCTION}}`, `{{CAND_AXIS_TARGET_AUDIENCE}}`,
-`{{CAND_AXIS_SCOPE}}`, `{{CAND_AXIS_APPROACH}}`, `{{CAND_AXIS_ACTIVITY}}`,
-`{{CAND_AXIS_SUM}}`.
-
 **Rules for substituted values:**
 
 - `{{CAND_VERDICT}}` (first search) must be exactly one of: `LIKELY_MATCH`,
   `WORTH_INSPECTING`, `UNRELATED`.
 - `{{CAND_VERIFIED_AT}}` is an ISO-8601 UTC timestamp captured at the moment
-  `gh api /repos/{owner}/{name}` returned 200 OK. RPT-04 requirement: **no URL
+  `gh api /repos/{owner}/{name}` returned 200 OK. **No URL
   appears in any report without this timestamp.**
 - `{{CAND_STALENESS_SUFFIX}}` is either the empty string or a leading
   ` · `-prefixed badge list from the `emit_staleness` helper (defined in SKILL.md), e.g.
@@ -166,12 +148,6 @@ mixed in with gh candidates).
 **Category:** {{CAND_CATEGORY}} · Discovered via web search: `{{CAND_SOURCE_QUERY}}` · Axis sum: {{CAND_AXIS_SUM}}
 ```
 
-**Required SaaS placeholders (verbatim):**
-
-`{{CAND_NAME}}`, `{{CAND_URL}}`, `{{CAND_AXIS_BADGE}}`,
-`{{CAND_EVIDENCE_NARRATIVE}}`, `{{CAND_OVERLAP_NARRATIVE}}`,
-`{{CAND_CATEGORY}}`, `{{CAND_SOURCE_QUERY}}`, `{{CAND_AXIS_SUM}}`.
-
 **Rules:**
 
 - `{{CAND_EVIDENCE_NARRATIVE}}` converts the web-search evidence_snippet into
@@ -191,7 +167,7 @@ do NOT emit an empty section.
 ## Verdict Badge Rules
 
 `{{VERDICT_BADGE}}` and `{{VERDICT_HEADLINE}}` are derived mechanically from
-the per-candidate verdicts (per D-19). The badge is the emoji; the headline is
+the per-candidate verdicts. The badge is the emoji; the headline is
 the human-prose one-liner that follows it in the H1.
 
 | Trigger | Badge | Headline (human prose) |
@@ -235,7 +211,7 @@ Hard rules enforced by the SKILL.md protocol when writing the report:
 - **Never** include `gh auth` output, environment variables, or token values in
   the report. Tokens are secrets; reports are shareable artifacts.
 - **Never** list a URL without a `verified {ISO timestamp}` annotation. This
-  is the hallucinated-citation guard (PITFALLS.md, Pitfall 11). If a candidate
+  is the hallucinated-citation guard. If a candidate
   failed verification (404), it does not appear in the report at all.
 - **Exactly one emoji per report in the H1** (the verdict badge), plus SaaS
   axis badges (⚠️ / 🔶) where applicable. No decorative emoji elsewhere.
@@ -279,14 +255,14 @@ based on which pass produced the candidate set.
   set; `deep-gh` came from deep search's expanded `gh api` search; `deep-web`
   came from deep search's web-search path.
 - `{{CAND_VAPOR_TRANSPARENCY_SUFFIX}}` — empty string OR the literal
-  ` (axes suggested {LABEL})` per D2-10, where `{LABEL}` is the verdict the
+  ` (axes suggested {LABEL})`, where `{LABEL}` is the verdict the
   threshold table would have produced absent the vapor override.
 - `{{CAND_FILE_PATHS_PROSE}}` — bulleted list, each bullet one evidence point
   in the form `- path/to/file.ext:LINE — <what this line/file proves>`. The
   trailing clause is short prose describing what the cited location
   demonstrates (not a raw JSON dump, not just a path). If the judge produced
   no file-path evidence, substitute the literal string `none` (which forces
-  SUPERFICIAL_MATCH per JDG-04, unless the candidate is VAPOR).
+  SUPERFICIAL_MATCH unless the candidate is VAPOR).
 - `{{CAND_VERDICT}}` — deep search expands the allowed verdict set to:
   `EXACT_MATCH`, `SIGNIFICANT_OVERLAP`, `PARTIAL_OVERLAP`, `SUPERFICIAL_MATCH`,
   `VAPOR`. First search invocations still use the first search set
@@ -334,15 +310,9 @@ includes these lines (concatenated inside the same `<details>` block):
 - gh rate budget (search) deep-search delta: {{DEEP_RATE_SEARCH_DELTA}}
 ```
 
-**Additional deep search placeholders (verbatim):**
-
-`{{DEEP_CLONES_ATTEMPTED}}`, `{{DEEP_CANDIDATES_INSPECTED}}`,
-`{{DEEP_CLONES_SKIPPED}}`, `{{DEEP_RATE_CORE_DELTA}}`,
-`{{DEEP_RATE_SEARCH_DELTA}}`.
-
 ## Your Angle Section
 
-Per D2-18 and D2-19, the negative-space synthesis runs **after** all candidate
+The negative-space synthesis runs **after** all candidate
 verdicts are derived (never before — missing-feature derivation requires the
 full inspected set).
 
@@ -369,7 +339,7 @@ cited evidence phrases).
 - For first-search reports, `{{YOUR_ANGLE_NARRATIVE}}` is the single-line
   summary only (no bullet list — bullets are deep-search-only).
 
-SKILL.md MUST run this synthesis step AFTER all candidate verdicts complete.
+Run this synthesis step only after all candidate verdicts complete.
 
 ## Deep-Search Discipline Additions
 
@@ -381,9 +351,9 @@ Beyond the Output Discipline rules above:
 - Every deep search candidate block that displays a verdict ≥ `PARTIAL_OVERLAP`
   MUST list at least one `path/to/file.ext:LINE — <description>` cite in
   `{{CAND_FILE_PATHS_PROSE}}`. If `{{CAND_FILE_PATHS_PROSE}}` is `none`, the
-  verdict MUST be `SUPERFICIAL_MATCH` or `VAPOR` (per JDG-04).
+  verdict MUST be `SUPERFICIAL_MATCH` or `VAPOR` (see the Deep-Search Evidence Rule in `judge-rubric.md`).
 - The `## What's missing — your angle` section MUST appear in every deep
-  search report (RPT-03 hard requirement) — even when `missing_features` is
+  search report — even when `missing_features` is
   empty (render the fallback string above).
 - The H1 verdict badge mapping (🔴/🟡/🟢) for deep search mirrors first search
   (highest per-candidate verdict drives the badge).

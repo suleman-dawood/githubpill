@@ -1,13 +1,12 @@
 # First-Search Query Patterns + Idea Sharpening
 
-This reference is loaded on-demand by `skills/githubpill/SKILL.md` during the
-**sharpen** (Step 1) and **query generation** (Step 2) phases of the first search
-protocol. Progressive disclosure: keep this open only while those steps run.
+Loaded on-demand during the sharpen (Step 1) and query-generation (Step 2)
+phases of the first-search protocol.
 
-## Idea Sharpening (Step 1 of SKILL.md protocol)
+## Idea Sharpening (Step 1)
 
-The raw user idea is fuzzy natural language. Before any `gh api` calls, the LLM
-rewrites it into a canonical form so that downstream queries and the report
+The raw user idea is fuzzy natural language. Before any `gh api` calls, the
+LLM rewrites it into a canonical form so downstream queries and the report
 header are deterministic and reproducible.
 
 **Sharpened form:**
@@ -24,15 +23,15 @@ header are deterministic and reproducible.
 - One pass only. Do not re-sharpen mid-run.
 - The sharpened sentence is the canonical idea for the rest of the run.
 
-### Proper-Noun and Jargon Preservation Rule (v0.3.0)
+### Proper-Noun and Jargon Preservation Rule
 
-Sharpening is the highest-risk step for distortion (see PITFALLS.md, Pitfall 10).
-LLMs over-generalize: "NDIS invoice validator" silently becomes "billing
-compliance tool," queries broaden, real matches disappear, the run lies to the
-user. The preservation guard prevents this.
+Sharpening is the highest-risk step for distortion: LLMs over-generalize,
+"NDIS invoice validator" silently becomes "billing compliance tool", queries
+broaden, real matches disappear, and the run lies to the user. The
+preservation guard prevents this.
 
 The sharpening step MUST preserve, verbatim, ANY term in the user's input that
-matches ANY of these patterns. Preserved terms appear in the
+matches ANY of the patterns below. Preserved terms appear in the
 `preserved_terms` array and MUST appear verbatim in at least one of the 7
 generated queries (except TOPIC-TAG which is tags-only).
 
@@ -130,7 +129,7 @@ Constraints:
 - `preserved_terms`: array of strings (may be empty if input had no proper nouns).
 - `differentiator_keywords`: array length **3 to 5**, kebab-case or single tokens.
 
-## Query Archetypes (Step 2 of SKILL.md protocol)
+## Query Archetypes (Step 2)
 
 Given the sharpened object, the LLM generates **exactly 7 queries in one LLM
 call**, returned as a JSON array of 7 strings. Each query is:
@@ -143,10 +142,7 @@ call**, returned as a JSON array of 7 strings. Each query is:
 
 The 7 archetypes are diversified so the result-set union covers literal,
 near-synonym, outcome, technical, adjacent-domain, canonical-product-name, and
-topic-tag framings of the same idea. This is per D-09 in `01-CONTEXT.md`.
-
-first search budgets up to **15 gh search calls** (7 queries × 1 search each, plus
-buffer for retries / pagination).
+topic-tag framings of the same idea.
 
 ### LITERAL
 
@@ -228,16 +224,16 @@ Hard rules every generated query must satisfy:
 - Queries are independent — do not chain or assume one feeds the next.
 - No quoting tricks intended to bypass the proper-noun guard.
 
-## Dedup & Ranking (Step 3)
+## Dedup & Ranking (Step 5)
 
-After the 5 queries return, dedup and rank candidates for verification:
+After the 7 queries return, dedup and rank candidates for verification:
 
-1. **Collect** every `full_name` across the 5 result sets.
+1. **Collect** every `full_name` across the 7 result sets.
 2. **Rank-sum** = sum of 0-indexed position in each query's result list. A repo
-   missing from a query receives a penalty of `per_page = 10` for that query.
+   missing from a query receives a penalty of 10 for that query.
 3. **Select** the top 5 candidates by **lowest rank-sum**. Ties broken by
    stargazer count (descending), then by `full_name` (ascending lexicographic).
-4. These 5 feed the verification step (`gh api /repos/{owner}/{name}`).
+4. These 5 feed the verification step (`scripts/verify-repo.sh`).
 
 Rationale: rank-sum rewards repos that appear in multiple archetypes — a strong
 signal of relevance — without requiring any single query to be perfect.
@@ -245,7 +241,7 @@ signal of relevance — without requiring any single query to be perfect.
 ## Sharpened Statement → Report Header
 
 The exact `sharpened_sentence` and `preserved_terms` list MUST appear in the
-report header (per D-15 and D-24). Do not summarize, do not re-paraphrase, do
-not strip. The user reads the header first; mismatch between their intent and
-the sharpened form is the single most important signal of a bad run, and they
-can only spot it if the sharpened form is shown unedited.
+report header. Do not summarize, do not re-paraphrase, do not strip. The user
+reads the header first; mismatch between their intent and the sharpened form
+is the single most important signal of a bad run, and they can only spot it
+if the sharpened form is shown unedited.
