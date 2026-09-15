@@ -22,6 +22,12 @@ describe("loadConfig", () => {
     expect(config.llm.model).toBe("gemini-2.0-flash");
   });
 
+  it("supports DeepSeek with its own key and default model", () => {
+    const config = loadConfig({ DEEPSEEK_API_KEY: "d" }, noGh);
+    expect(config.llm.provider).toBe("deepseek");
+    expect(config.llm.model).toBe("deepseek-chat");
+  });
+
   it("accepts GOOGLE_API_KEY as the Gemini key", () => {
     expect(loadConfig({ GEMINI_API_KEY: "g" }, noGh).llm.provider).toBe("gemini");
     expect(loadConfig({ GOOGLE_API_KEY: "g" }, noGh).llm.provider).toBe("gemini");

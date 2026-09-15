@@ -38,9 +38,9 @@ Useful flags:
 
 ## Requirements
 
-- One LLM API key — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
-  `GEMINI_API_KEY` / `GOOGLE_API_KEY`. The provider is auto-detected from
-  whichever key is present, or set with `--provider`.
+- One LLM API key — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `GEMINI_API_KEY` / `GOOGLE_API_KEY`, or `DEEPSEEK_API_KEY`. The provider is
+  auto-detected from whichever key is present, or set with `--provider`.
 - `GITHUB_TOKEN` or `GH_TOKEN` — optional; raises GitHub rate limits. Falls back to `gh auth token`.
 - Node.js ≥ 20.
 

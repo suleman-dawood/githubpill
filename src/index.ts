@@ -29,7 +29,7 @@ export type { SearchOptions, SourceAdapter } from "./adapters/index.js";
 export {
   AnthropicClient,
   GeminiClient,
-  OpenAIClient,
+  OpenAICompatibleClient,
   createLLMClient,
 } from "./synthesis/providers/index.js";
 export type { LLMClient, ProviderOptions, StructuredRequest } from "./synthesis/providers/index.js";

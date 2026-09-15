@@ -19,7 +19,7 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 | `src/adapters/` | Source adapters (GitHub, npm, PyPI, Hacker News) behind one interface |
 | `src/retrieval/` | Query planning, fan-out, dedupe, ranking |
 | `src/synthesis/` | Prompt, Zod schemas, mechanical verdict derivation |
-| `src/synthesis/providers/` | LLM providers behind `LLMClient` (Anthropic, OpenAI, Gemini) + factory |
+| `src/synthesis/providers/` | LLM providers behind `LLMClient` (Anthropic, OpenAI, Gemini, DeepSeek) + factory |
 | `src/verify/` | Live citation-integrity gate |
 | `src/report/` | JSON, Markdown, and HTML renderers |
 | `src/config.ts` | Env -> validated `Config` (provider, keys, sources, limits) |

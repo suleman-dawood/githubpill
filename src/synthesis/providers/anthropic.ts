@@ -1,10 +1,9 @@
 import { httpPost, parseJson } from "../../adapters/http.js";
 import { ProviderError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
-import { BaseLLMClient } from "./base.js";
 import { errorMessage } from "./response.js";
-import { jsonSchema } from "./structured.js";
-import type { ProviderOptions, StructuredRequest } from "./types.js";
+import { toJsonSchema, validateStructured, withStructuredRetry } from "./structured.js";
+import type { LLMClient, ProviderOptions, StructuredRequest } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://api.anthropic.com";
 const API_VERSION = "2023-06-01";
@@ -14,14 +13,22 @@ interface MessagesResponse {
 }
 
 /** Anthropic Messages API, using forced tool use for structured output. */
-export class AnthropicClient extends BaseLLMClient {
+export class AnthropicClient implements LLMClient {
   readonly provider: ProviderId = "anthropic";
+  readonly model: string;
 
-  constructor(options: ProviderOptions) {
-    super(options);
+  constructor(private readonly options: ProviderOptions) {
+    this.model = options.model;
   }
 
-  protected async send(request: StructuredRequest<unknown>): Promise<unknown> {
+  async completeStructured<T>(request: StructuredRequest<T>): Promise<T> {
+    return withStructuredRetry(async () => {
+      const raw = await this.send(request);
+      return validateStructured(request.schema, raw, this.provider);
+    });
+  }
+
+  private async send(request: StructuredRequest<unknown>): Promise<unknown> {
     const baseUrl = this.options.baseUrl ?? DEFAULT_BASE_URL;
     const response = await httpPost(
       `${baseUrl}/v1/messages`,
@@ -35,7 +42,7 @@ export class AnthropicClient extends BaseLLMClient {
           {
             name: request.schemaName,
             description: `Return the ${request.schemaName} result.`,
-            input_schema: jsonSchema(request.schema),
+            input_schema: toJsonSchema(request.schema),
           },
         ],
         tool_choice: { type: "tool", name: request.schemaName },

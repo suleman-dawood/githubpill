@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AnthropicClient } from "./anthropic.js";
 import { GeminiClient } from "./gemini.js";
-import { OpenAIClient } from "./openai.js";
+import { OpenAICompatibleClient } from "./openai-compatible.js";
 import { createLLMClient } from "./index.js";
 
 const base = { apiKey: "k", model: "m", maxTokens: 10, timeoutMs: 1_000 };
@@ -9,11 +9,17 @@ const base = { apiKey: "k", model: "m", maxTokens: 10, timeoutMs: 1_000 };
 describe("createLLMClient", () => {
   it("builds the client matching the provider", () => {
     expect(createLLMClient({ ...base, provider: "anthropic" })).toBeInstanceOf(AnthropicClient);
-    expect(createLLMClient({ ...base, provider: "openai" })).toBeInstanceOf(OpenAIClient);
     expect(createLLMClient({ ...base, provider: "gemini" })).toBeInstanceOf(GeminiClient);
   });
 
-  it("carries the model through", () => {
-    expect(createLLMClient({ ...base, provider: "openai", model: "gpt-x" }).model).toBe("gpt-x");
+  it("uses the OpenAI-compatible client for OpenAI and DeepSeek", () => {
+    expect(createLLMClient({ ...base, provider: "openai" })).toBeInstanceOf(OpenAICompatibleClient);
+    expect(createLLMClient({ ...base, provider: "deepseek" })).toBeInstanceOf(OpenAICompatibleClient);
+  });
+
+  it("keeps the provider identity and model", () => {
+    const deepseek = createLLMClient({ ...base, provider: "deepseek", model: "deepseek-reasoner" });
+    expect(deepseek.provider).toBe("deepseek");
+    expect(deepseek.model).toBe("deepseek-reasoner");
   });
 });

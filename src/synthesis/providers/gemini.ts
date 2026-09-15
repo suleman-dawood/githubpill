@@ -1,10 +1,9 @@
 import { httpPost, parseJson } from "../../adapters/http.js";
 import { ProviderError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
-import { BaseLLMClient } from "./base.js";
 import { errorMessage } from "./response.js";
-import { parseStructuredText } from "./structured.js";
-import type { ProviderOptions, StructuredRequest } from "./types.js";
+import { parseStructuredText, validateStructured, withStructuredRetry } from "./structured.js";
+import type { LLMClient, ProviderOptions, StructuredRequest } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -17,14 +16,22 @@ interface GenerateContentResponse {
  * response schema, because Gemini's schema dialect is a subset of JSON Schema;
  * the shared Zod validation enforces the contract instead.
  */
-export class GeminiClient extends BaseLLMClient {
+export class GeminiClient implements LLMClient {
   readonly provider: ProviderId = "gemini";
+  readonly model: string;
 
-  constructor(options: ProviderOptions) {
-    super(options);
+  constructor(private readonly options: ProviderOptions) {
+    this.model = options.model;
   }
 
-  protected async send(request: StructuredRequest<unknown>): Promise<unknown> {
+  async completeStructured<T>(request: StructuredRequest<T>): Promise<T> {
+    return withStructuredRetry(async () => {
+      const raw = await this.send(request);
+      return validateStructured(request.schema, raw, this.provider);
+    });
+  }
+
+  private async send(request: StructuredRequest<unknown>): Promise<unknown> {
     const baseUrl = this.options.baseUrl ?? DEFAULT_BASE_URL;
     const url = `${baseUrl}/models/${encodeURIComponent(this.model)}:generateContent`;
     const response = await httpPost(

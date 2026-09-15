@@ -8,6 +8,7 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
   anthropic: "claude-sonnet-4-5",
   openai: "gpt-4o",
   gemini: "gemini-2.0-flash",
+  deepseek: "deepseek-chat",
 };
 
 /** Env vars checked, in order, for each provider's API key. */
@@ -15,12 +16,14 @@ const API_KEY_ENV: Record<ProviderId, readonly string[]> = {
   anthropic: ["ANTHROPIC_API_KEY"],
   openai: ["OPENAI_API_KEY"],
   gemini: ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  deepseek: ["DEEPSEEK_API_KEY"],
 };
 
 const BASE_URL_ENV: Record<ProviderId, string> = {
   anthropic: "ANTHROPIC_BASE_URL",
   openai: "OPENAI_BASE_URL",
   gemini: "GEMINI_BASE_URL",
+  deepseek: "DEEPSEEK_BASE_URL",
 };
 
 export interface LlmConfig {

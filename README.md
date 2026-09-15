@@ -46,10 +46,10 @@ flowchart LR
   ranks by how many independent searches surfaced each candidate.
 - **Synthesis** (`src/synthesis/`) sends the candidates to an LLM and gets
   back axis scores plus rationale, validated against a Zod schema. Providers
-  are strategies behind one `LLMClient` interface (Anthropic, OpenAI, Gemini),
-  built by a factory from validated config. The LLM never emits a verdict
-  label: labels and the overall band are derived mechanically from the scores,
-  so identical scores always give identical verdicts.
+  are strategies behind one `LLMClient` interface (Anthropic, OpenAI, Gemini,
+  DeepSeek), built by a factory from validated config. The LLM never emits a
+  verdict label: labels and the overall band are derived mechanically from the
+  scores, so identical scores always give identical verdicts.
 - **Verification** (`src/verify/`) re-checks every candidate live and drops the
   ones that fail — the citation-integrity gate.
 - **Reports** (`src/report/`) render JSON, Markdown, and a self-contained HTML
@@ -70,6 +70,7 @@ whichever key is present, or set explicitly with `--provider` /
 | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` |
 | `openai` | `OPENAI_API_KEY` | `gpt-4o` |
 | `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-2.0-flash` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
 
 ```bash
 export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY / GEMINI_API_KEY

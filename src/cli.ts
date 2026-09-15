@@ -31,9 +31,10 @@ Options:
   -h, --help             Show this help
 
 Providers and API keys (first key found selects the provider):
-  anthropic   ANTHROPIC_API_KEY            default model ${DEFAULT_MODELS.anthropic}
-  openai      OPENAI_API_KEY               default model ${DEFAULT_MODELS.openai}
+  anthropic   ANTHROPIC_API_KEY                  default model ${DEFAULT_MODELS.anthropic}
+  openai      OPENAI_API_KEY                     default model ${DEFAULT_MODELS.openai}
   gemini      GEMINI_API_KEY or GOOGLE_API_KEY   default model ${DEFAULT_MODELS.gemini}
+  deepseek    DEEPSEEK_API_KEY                   default model ${DEFAULT_MODELS.deepseek}
 
 Other environment:
   GITHUB_TOKEN / GH_TOKEN   Optional; raises GitHub rate limits (falls back to \`gh auth token\`)
