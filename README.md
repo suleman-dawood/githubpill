@@ -159,8 +159,14 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 ## Releasing
 
 Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
-tests, builds, publishes to npm (needs an `NPM_TOKEN` secret) and creates the
-GitHub release. After publishing, refresh `Formula/githubpill.rb`:
+tests, builds, publishes to npm and creates the GitHub release.
+
+The workflow needs an `NPM_TOKEN` repository secret. It must be a classic
+**Automation** token (npmjs.com → Access Tokens → Classic → Automation).
+A classic *Publish* token still prompts for a one-time password and cannot
+publish unattended, and a granular token needs "bypass 2FA" enabled.
+
+After publishing, refresh `Formula/githubpill.rb`:
 
 ```bash
 curl -sL https://registry.npmjs.org/githubpill/-/githubpill-<version>.tgz | shasum -a 256
