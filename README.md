@@ -159,13 +159,18 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 
 ## Releasing
 
-Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
-tests, builds, publishes to npm and creates the GitHub release.
+Merging to `main` runs `.github/workflows/release.yml`: it typechecks, tests,
+builds, bumps the patch version, publishes to npm, pushes the bump commit and
+tag, and creates the GitHub release. Add `[skip release]` to a merge commit to
+skip it, or run the workflow manually from the Actions tab.
 
 The workflow needs an `NPM_TOKEN` repository secret. On a 2FA-enabled account
 it must be a classic **Automation** token (or a granular token with "Bypass
 2FA" enabled); a classic **Publish** token is rejected with `E403` because it
 still requires a one-time password.
+
+Because it pushes the version bump back to `main`, branch protection must allow
+the Actions token to write, or you must pass a personal access token instead.
 
 ## Roadmap
 
