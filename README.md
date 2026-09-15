@@ -75,10 +75,8 @@ flowchart LR
 ## Install
 
 ```bash
-npm install -g githubpill     # npm
-npx githubpill "<idea>"       # no install
-brew tap suleman-dawood/githubpill https://github.com/suleman-dawood/githubpill
-brew install githubpill       # Homebrew
+npm install -g githubpill     # install
+npx githubpill "<idea>"       # or run without installing
 ```
 
 Requires Node ≥ 20 and one LLM API key. The provider is auto-detected from
@@ -161,16 +159,10 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
 tests, builds, publishes to npm and creates the GitHub release.
 
-The workflow needs an `NPM_TOKEN` repository secret. It must be a classic
-**Automation** token (npmjs.com → Access Tokens → Classic → Automation).
-A classic *Publish* token still prompts for a one-time password and cannot
-publish unattended, and a granular token needs "bypass 2FA" enabled.
-
-After publishing, refresh `Formula/githubpill.rb`:
-
-```bash
-curl -sL https://registry.npmjs.org/githubpill/-/githubpill-<version>.tgz | shasum -a 256
-```
+The workflow needs an `NPM_TOKEN` repository secret: a **granular access token
+with "Bypass 2FA" enabled** and read/write package access. A classic token
+without a 2FA bypass is rejected with `E403` because the account requires 2FA
+to publish.
 
 ## Roadmap
 

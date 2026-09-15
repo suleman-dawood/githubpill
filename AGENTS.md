@@ -30,7 +30,6 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 | `src/validate.ts` | Validate mode; `src/explore.ts` is explore mode; `src/cli.ts` is the entry point |
 | `skills/githubpill/` | The Agent Skills wrapper over the CLI |
 | `.claude-plugin/` | Claude Code marketplace manifest |
-| `Formula/` | Homebrew formula |
 | `install.sh` | Installs the skill into every detected agentic CLI |
 | `eval/` | Golden eval cases (harness to come) |
 
