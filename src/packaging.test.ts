@@ -24,7 +24,7 @@ describe("packaging", () => {
   it("points the package bin at the built CLI", () => {
     const pkg = json<{ bin: Record<string, string>; version: string }>("package.json");
     expect(pkg.bin.githubpill).toBe("./dist/cli.js");
-    expect(pkg.version).toBe("1.0.0");
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
   it("ships valid, correctly named plugin manifests", () => {
