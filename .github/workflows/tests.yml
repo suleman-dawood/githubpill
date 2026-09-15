@@ -1,19 +1,22 @@
 name: tests
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - 'scripts/**'
-      - 'tests/**'
-      - '.github/workflows/tests.yml'
+
 jobs:
-  unit:
-    name: unit + e2e tests (offline, mocked)
+  node:
+    name: typecheck, test, build
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-      - name: Run all tests (unit + e2e)
-        run: bash tests/run-all-tests.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

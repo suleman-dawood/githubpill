@@ -13,7 +13,8 @@
 #   bash install.sh --copy          # copy instead of symlink
 #   bash install.sh --target <dir>  # one explicit skills directory
 #
-# pi users get a richer install (subagent tool + judge agent) via pi/install.sh.
+# The skill wraps the githubpill CLI, so the host also needs the CLI installed
+# (npm install -g githubpill) and an ANTHROPIC_API_KEY in its environment.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,7 +44,7 @@ GLOBAL_TARGETS=(
   "claude|$HOME/.claude/skills|Claude Code"
   "opencode|$HOME/.config/opencode/skills|opencode"
   "codex|$HOME/.agents/skills|Codex CLI (and other Agent Skills hosts)"
-  "pi|$HOME/.pi/agent/skills|pi (skill only; run pi/install.sh for the full port)"
+  "pi|$HOME/.pi/agent/skills|pi"
 )
 
 # Project-level skills directories.

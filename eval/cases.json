@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "notes": "Golden cases for the GithubPill eval. known_competitors are repos that a correct search should surface for the idea; recall@5 measures whether they land in the ranked top 5. queries approximate the seven first-search archetypes with fixed text so recall is reproducible without an LLM.",
+  "cases": [
+    {
+      "id": "todo-cli",
+      "idea": "A CLI tool for managing personal todo lists in markdown files with tags and due dates",
+      "expected_band": "🔴",
+      "known_competitors": ["todotxt/todo.txt-cli", "GothenburgBitFactory/taskwarrior"],
+      "queries": [
+        "todo cli markdown",
+        "todo list manager terminal",
+        "task management command line markdown tags due dates",
+        "todo cli language:python",
+        "personal task tracker terminal",
+        "todotxt taskwarrior todo.txt-cli",
+        "topic:todo topic:task-manager topic:cli"
+      ]
+    },
+    {
+      "id": "youtube-frontend",
+      "idea": "An open-source, self-hostable video sharing and streaming platform with uploads, transcoding, comments, and discovery",
+      "expected_band": "🔴",
+      "known_competitors": ["iv-org/invidious", "FreeTubeApp/FreeTube"],
+      "queries": [
+        "open source video sharing platform",
+        "self-hosted video streaming server",
+        "youtube alternative self hosted",
+        "video platform language:python",
+        "media sharing platform federation",
+        "invidious FreeTube PeerTube",
+        "topic:video-streaming topic:self-hosted"
+      ]
+    },
+    {
+      "id": "json-query-cli",
+      "idea": "A CLI to pretty-print and query JSON from the terminal",
+      "expected_band": "🔴",
+      "known_competitors": ["jqlang/jq", "antonmedv/fx"],
+      "queries": [
+        "json command line processor",
+        "json query tool terminal",
+        "pretty print json cli",
+        "json parser language:go",
+        "structured data query command line",
+        "jq fx jsonpath",
+        "topic:json topic:cli"
+      ]
+    },
+    {
+      "id": "dotfiles-manager",
+      "idea": "A tool to manage and sync dotfiles across multiple machines",
+      "expected_band": "🔴",
+      "known_competitors": ["TheLocehiliosan/yadm", "anishathalye/dotbot"],
+      "queries": [
+        "dotfiles manager",
+        "dotfiles synchronization tool",
+        "manage dotfiles multiple machines",
+        "dotfiles manager language:shell",
+        "config file versioning bootstrap",
+        "yadm dotbot chezmoi",
+        "topic:dotfiles"
+      ]
+    },
+    {
+      "id": "rss-reader",
+      "idea": "A self-hosted RSS feed reader with a web interface",
+      "expected_band": "🔴",
+      "known_competitors": ["FreshRSS/FreshRSS", "miniflux/v2"],
+      "queries": [
+        "rss feed reader",
+        "self hosted feed aggregator",
+        "rss reader web interface",
+        "feed reader language:php",
+        "news aggregator self hosted",
+        "FreshRSS miniflux Tiny Tiny RSS",
+        "topic:rss-reader topic:feed-reader"
+      ]
+    },
+    {
+      "id": "release-automation",
+      "idea": "A tool that automates semantic versioning and changelog generation from commit messages",
+      "expected_band": "🔴",
+      "known_competitors": ["semantic-release/semantic-release", "googleapis/release-please"],
+      "queries": [
+        "semantic release automation",
+        "automatic changelog generation",
+        "version bump from commit messages",
+        "release automation language:javascript",
+        "conventional commits changelog",
+        "semantic-release release-please standard-version",
+        "topic:semantic-release topic:changelog"
+      ]
+    },
+    {
+      "id": "pr-review-bot",
+      "idea": "A bot that automatically reviews pull requests and comments on code issues",
+      "expected_band": "🔴",
+      "known_competitors": ["reviewdog/reviewdog", "sweepai/sweep"],
+      "queries": [
+        "pull request review bot",
+        "automated code review",
+        "github bot comments on pull requests",
+        "code review automation language:go",
+        "static analysis bot pull request",
+        "reviewdog sweep code review",
+        "topic:code-review topic:github-app"
+      ]
+    },
+    {
+      "id": "tui-file-manager",
+      "idea": "A keyboard-driven terminal file manager",
+      "expected_band": "🔴",
+      "known_competitors": ["jarun/nnn", "ranger/ranger"],
+      "queries": [
+        "terminal file manager",
+        "tui file browser",
+        "keyboard driven file manager",
+        "file manager language:c",
+        "console file explorer",
+        "nnn ranger lf file manager",
+        "topic:file-manager topic:tui"
+      ]
+    },
+    {
+      "id": "mock-api-server",
+      "idea": "A CLI that spins up a mock REST API from a config file",
+      "expected_band": "🟡",
+      "known_competitors": ["typicode/json-server", "stoplightio/prism"],
+      "queries": [
+        "mock rest api server",
+        "fake api from config",
+        "api mocking command line",
+        "mock server language:javascript",
+        "stub rest endpoints for testing",
+        "json-server prism mock server",
+        "topic:mock-server topic:api-testing"
+      ]
+    },
+    {
+      "id": "llm-eval-dashboard",
+      "idea": "A web dashboard for evaluating LLM prompt performance across multiple models with side-by-side comparison and historical tracking",
+      "expected_band": "🟡",
+      "known_competitors": ["promptfoo/promptfoo", "openai/evals"],
+      "queries": [
+        "llm prompt evaluation",
+        "llm eval dashboard",
+        "compare llm models side by side",
+        "prompt testing language:typescript",
+        "model benchmark tracking dashboard",
+        "promptfoo openai evals",
+        "topic:llm-evaluation topic:prompt-engineering"
+      ]
+    },
+    {
+      "id": "markdown-slides",
+      "idea": "A CLI that converts markdown files into presentation slides",
+      "expected_band": "🟡",
+      "known_competitors": ["maaslalani/slides", "gnab/remark"],
+      "queries": [
+        "markdown to slides",
+        "markdown presentation tool",
+        "markdown slides terminal",
+        "presentation generator language:go",
+        "convert markdown to presentation",
+        "slides remark marp",
+        "topic:markdown topic:presentation"
+      ]
+    },
+    {
+      "id": "ndis-invoice-validator",
+      "idea": "An NDIS invoice validator that checks Australian disability-services billing line items against current NDIS pricing arrangements",
+      "expected_band": "🟢",
+      "known_competitors": [],
+      "queries": [
+        "NDIS invoice validator",
+        "NDIS billing checker",
+        "Australian disability services invoice compliance",
+        "NDIS pricing language:python",
+        "healthcare invoice validation Australia",
+        "NDIS claim validation",
+        "topic:ndis topic:invoice-validation"
+      ]
+    }
+  ]
+}

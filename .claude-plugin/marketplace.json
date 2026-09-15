@@ -9,7 +9,7 @@
     {
       "name": "githubpill",
       "source": "./",
-      "description": "Prior-art reconnaissance for GitHub project ideas. Returns a fast metadata-only verdict in ~90s.",
+      "description": "Prior-art reconnaissance for project ideas. Searches GitHub, npm, PyPI, and Hacker News, verifies every citation live, and returns a verdict.",
       "category": "research",
       "tags": ["github", "validation", "prior-art", "githubpill"],
       "strict": true

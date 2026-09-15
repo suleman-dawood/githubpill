@@ -6,53 +6,62 @@ other Agent Skills hosts).
 
 ## What this project is
 
-GithubPill is a prior-art reconnaissance tool for project ideas. Given a
-fuzzy idea, it returns a 🟢/🟡/🔴 verdict on whether something like it
-already exists on GitHub, with every cited URL verified live. It ships as an
-Agent Skills skill (`skills/githubpill/`) that runs in any compatible host,
-plus a Claude Code plugin manifest (`.claude-plugin/`).
+GithubPill is prior-art reconnaissance for project ideas. Given a fuzzy idea,
+it retrieves candidate projects from several sources, synthesizes the findings
+with an LLM, verifies every cited URL live, and returns a 🟢/🟡/🔴 verdict. The
+core is a TypeScript CLI/service; the Agent Skills skill in
+`skills/githubpill/` is a thin wrapper that invokes it.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `skills/githubpill/SKILL.md` | The skill: hard rules, scripts contract, tier skeletons |
-| `skills/githubpill/references/` | Protocol detail loaded on demand (first search, deep search, judging, queries, reports) |
-| `skills/githubpill/scripts/` | The executable helpers — the single source of truth for `gh`/`git` behavior |
-| `.claude-plugin/` | Claude Code marketplace manifest (thin wrapper over the skill) |
-| `pi/` | pi host extras: subagent tool + deep-search judge agent |
+| `src/adapters/` | Source adapters (GitHub, npm, PyPI, Hacker News) behind one interface |
+| `src/retrieval/` | Query planning, fan-out, dedupe, ranking |
+| `src/synthesis/` | LLM client, Zod schemas, prompt, mechanical verdict derivation |
+| `src/verify/` | Live citation-integrity gate |
+| `src/report/` | JSON, Markdown, and HTML renderers |
+| `src/pipeline.ts` | Orchestrates the stages; `src/cli.ts` is the entry point |
+| `skills/githubpill/` | The Agent Skills wrapper over the CLI |
+| `.claude-plugin/` | Claude Code marketplace manifest |
 | `install.sh` | Installs the skill into every detected agentic CLI |
-| `eval/` | Golden eval harness: recall, citation integrity, verdict bands |
-| `tests/` | Offline unit tests with mocked `gh`/`git`/`curl` |
+| `eval/` | Golden eval cases (harness to come) |
 | `docs/` | Example reports |
 
 ## Commands
 
 ```bash
-bash tests/run-all-tests.sh      # offline unit + structural tests (no network)
-bash tests/install-validation.sh # plugin/skill structure checks
-bash eval/run-eval.sh            # offline eval (report lint + structure)
-bash eval/run-eval.sh --live     # live eval (needs gh auth; burns API quota)
-bash install.sh --project        # dogfood the skill in this repo
+npm install
+npm run typecheck     # tsc --noEmit
+npm test              # vitest (offline, no network, no API keys)
+npm run build         # emit dist/
+node dist/cli.js "a CLI that previews diffs as a side-by-side TUI"
 ```
 
-Run `tests/run-all-tests.sh` before proposing a change. It must pass.
+Run `npm run typecheck && npm test` before proposing a change. Both must pass.
+Tests never touch the network or an LLM — adapters are exercised with a mocked
+`fetch`, and the LLM client is exercised against a local mock server.
+
+## Architecture rules
+
+- **Adapters are the only source-specific code.** Adding a source means
+  implementing `SourceAdapter` (`search` + `verify`) in `src/adapters/` and
+  registering it in `src/adapters/index.ts`. Nothing in `retrieval/`,
+  `synthesis/`, or `report/` should learn about a specific source.
+- **Verdict labels are derived mechanically** from axis scores in
+  `src/synthesis/verdict.ts`. The LLM emits axis scores and rationale only —
+  never a label, never a band. Do not move that logic into the prompt.
+- **Verification is a gate, not a decoration.** A candidate that fails
+  `verify` is dropped before synthesis. Do not render unverified URLs.
+- **One LLM provider behind `LLMClient`.** Do not add provider-specific
+  branching outside `src/synthesis/llm.ts`.
+- **The skill stays a wrapper.** `skills/githubpill/SKILL.md` describes how to
+  call the CLI; protocol logic belongs in `src/`.
 
 ## Conventions
 
-- **The skill is host-neutral.** Never add host-specific identifiers
-  (`$CLAUDE_PLUGIN_ROOT`, `WebSearch`, `Task`, one host's tool names) to
-  `skills/githubpill/`. Name capabilities generically ("web-search tool",
-  "subagent tool"); see the Tool portability section in `SKILL.md`.
-- **Scripts are the single source of truth.** Protocol behavior lives in
-  `skills/githubpill/scripts/*.sh`, not inlined in `SKILL.md`. Each script
-  does one job, prints JSON or a path on stdout, and signals failure with
-  documented exit codes. Add tests under `tests/` when you change one.
-- **Keep files small and readable.** `SKILL.md` stays a lean driver;
-  protocol detail belongs in `references/`. Prefer clear names over comments.
-- **Comments explain why, not what.** No ticket numbers, no changelog
-  narration, no "Step 1:" banners inside code.
-- **Clone safety is enforced in `scripts/safe-clone.sh`.** Never document or
-  run a raw `git clone` for candidate repos.
-- **Deterministic judging.** Temperature 0 on LLM calls; verdict labels are
-  derived mechanically from axis scores, never emitted by the model.
+- TypeScript, ESM, `strict`. Import local modules with a `.js` extension.
+- Keep files small and single-purpose. Prefer clear names over comments.
+- Comments explain why, not what. No ticket numbers, no changelog narration.
+- Validate external input at the boundary with Zod; trust internal types.
+- New behavior gets a test next to it (`*.test.ts`), offline by default.
