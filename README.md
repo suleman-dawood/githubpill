@@ -18,12 +18,14 @@ every cited URL live, and returns a verdict:
 |---|---|---|
 | **Validate** (default) | Does this already exist? | `githubpill "<idea>"` |
 | **Validate, deep** | ...and what does the source actually do? | `githubpill --deep "<idea>"` |
-| **Explore** | What is the shape of this space, and where is the opening? | `githubpill explore "<space>"` |
+| **Explore** | What is the shape of this space, and where is the opening? | `githubpill --explore "<space>"` |
+| **Explore, deep** | ...grounded in the top projects' source | `githubpill --deep --explore "<space>"` |
 
 Validate retrieves prior art, scores overlap, and returns the verdict. Deep
 mode additionally clones the strongest candidates and cites `path:LINE`
 evidence from their source. Explore clusters the retrieved field, states what
-none of the retrieved projects does, and proposes grounded directions.
+none of the retrieved projects does, and proposes grounded directions. The two
+combine: `--deep --explore` grounds the exploration in real source.
 
 ## Why
 
@@ -111,7 +113,8 @@ githubpill --json --html "a self-hosted RSS reader"   # extra report formats
 githubpill --deep "a self-hosted RSS reader"          # clone + file:LINE evidence
 githubpill --provider openai "a dotfiles manager"     # pick the LLM provider
 githubpill --sources github,npm "a dotfiles manager"  # restrict sources
-githubpill explore "local-first note taking"          # landscape + directions
+githubpill --explore "local-first note taking"        # landscape + directions
+githubpill --deep --explore "local-first note taking" # ...with cloned evidence
 ```
 
 The verdict block goes to stdout; progress goes to stderr. Reports land in
@@ -156,13 +159,18 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 
 ## Releasing
 
-Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
-tests, builds, publishes to npm and creates the GitHub release.
+Merging to `main` runs `.github/workflows/release.yml`: it typechecks, tests,
+builds, bumps the patch version, publishes to npm, pushes the bump commit and
+tag, and creates the GitHub release. Add `[skip release]` to a merge commit to
+skip it, or run the workflow manually from the Actions tab.
 
 The workflow needs an `NPM_TOKEN` repository secret. On a 2FA-enabled account
 it must be a classic **Automation** token (or a granular token with "Bypass
 2FA" enabled); a classic **Publish** token is rejected with `E403` because it
 still requires a one-time password.
+
+Because it pushes the version bump back to `main`, branch protection must allow
+the Actions token to write, or you must pass a personal access token instead.
 
 ## Roadmap
 

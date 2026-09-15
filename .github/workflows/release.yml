@@ -2,19 +2,28 @@ name: release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
   id-token: write
 
+# Never run two releases at once; queue them instead.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   release:
-    name: publish to npm and create the GitHub release
+    name: bump, publish to npm, and tag
     runs-on: ubuntu-latest
+    # Skip the version-bump commit this workflow itself pushes.
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]')
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -36,12 +45,25 @@ jobs:
             exit 1
           fi
 
+      - name: Bump the version
+        id: bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch -m "chore(release): %s [skip release]"
+          echo "tag=$(git describe --tags --abbrev=0)" >> "$GITHUB_OUTPUT"
+
       - name: Publish to npm
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: Push the bump commit and tag
+        run: |
+          git push origin HEAD:main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
       - name: Create the GitHub release
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME"
+        run: gh release create "${{ steps.bump.outputs.tag }}" --generate-notes --title "${{ steps.bump.outputs.tag }}"
         env:
           GH_TOKEN: ${{ github.token }}

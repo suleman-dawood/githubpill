@@ -4,18 +4,26 @@ import { mapLimit } from "../adapters/http.js";
 import type { SourceAdapter } from "../adapters/index.js";
 
 export interface VerifyResult {
-  /** Candidates that passed verification (or had no adapter to check with). */
+  /** Candidates that passed, were not checked, or could not be checked. */
   candidates: Candidate[];
-  /** Candidates that failed verification and were dropped. */
+  /** Candidates the source reports as gone (404/410). */
   dropped: Candidate[];
+  /** Candidates the check could not confirm (rate limit, 5xx, network). */
+  unverified: Candidate[];
   checked: number;
   alive: number;
 }
 
+/** Statuses that mean the artifact is gone, as opposed to "could not check". */
+const GONE_STATUSES = new Set([404, 410]);
+
 /**
- * Confirm every candidate still exists at its source. A candidate that fails
- * verification is dropped from the run — this is the citation-integrity gate
- * that keeps dead links out of reports.
+ * Confirm candidates still exist at their source.
+ *
+ * Only a definitive "gone" (404/410) drops a candidate. A rate limit, server
+ * error, or network failure is inconclusive: the candidate came from a live
+ * search, so it is kept and marked unverified. Treating a 403 rate limit as
+ * "does not exist" silently empties the result set.
  */
 export async function verifyCandidates(
   candidates: readonly Candidate[],
@@ -35,16 +43,32 @@ export async function verifyCandidates(
       config,
       ...(signal ? { signal } : {}),
     });
-    onProgress?.({ type: "verify", url: candidate.url, ok: verification.ok });
+    onProgress?.({ type: "verify", url: candidate.url, ok: verification.ok, status: verification.status });
     return { candidate: { ...candidate, verification }, ok: verification.ok, checked: true };
   });
 
-  const kept = results.filter((result) => result.ok).map((result) => result.candidate);
-  const dropped = results.filter((result) => !result.ok).map((result) => result.candidate);
+  const kept: Candidate[] = [];
+  const dropped: Candidate[] = [];
+  const unverified: Candidate[] = [];
+
+  for (const result of results) {
+    if (!result.checked || result.ok) {
+      kept.push(result.candidate);
+      continue;
+    }
+    const status = result.candidate.verification?.status ?? null;
+    if (status !== null && GONE_STATUSES.has(status)) {
+      dropped.push(result.candidate);
+    } else {
+      unverified.push(result.candidate);
+      kept.push(result.candidate);
+    }
+  }
 
   return {
     candidates: kept,
     dropped,
+    unverified,
     checked: results.filter((result) => result.checked).length,
     alive: kept.filter((candidate) => candidate.verification?.ok).length,
   };

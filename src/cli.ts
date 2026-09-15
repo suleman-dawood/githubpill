@@ -19,11 +19,13 @@ import type { ExplorationReport, ProgressEvent, Report } from "./types.js";
 const HELP = `githubpill — prior-art reconnaissance for project ideas
 
 Usage:
-  githubpill [options] "<idea>"            Validate an idea (default)
-  githubpill explore [options] "<space>"   Explore a space for openings
+  githubpill [options] "<idea>"             Validate an idea (default)
+  githubpill --explore [options] "<space>"  Explore a space for openings
 
 Options:
-  --deep                 Clone the top candidates and cite file:LINE evidence (validate only)
+  --deep                 Clone top candidates and cite file:LINE evidence
+  --explore              Explore a space instead of validating an idea
+                         (combine with --deep for cloned evidence)
   --provider <id>        LLM provider: anthropic | openai | gemini | deepseek
   --model <id>           Model id (default depends on provider)
   --sources <csv>        Sources: github,npm,pypi,hackernews
@@ -50,7 +52,8 @@ Other environment:
 Examples:
   githubpill "a CLI that previews diffs as a side-by-side TUI"
   githubpill --deep "a self-hosted RSS reader"
-  githubpill explore "local-first note taking"
+  githubpill --explore "local-first note taking"
+  githubpill --deep --explore "local-first note taking"
 `;
 
 function slugify(text: string): string {
@@ -160,11 +163,19 @@ function progressHandler(log: Logger): (event: ProgressEvent) => void {
       case "ranked":
         log.info(`  ranked ${event.count} candidates`);
         break;
-      case "verify":
-        log.info(`  verify ${event.ok ? "ok" : "DEAD"} ${event.url}`);
+      case "verify": {
+        const label = event.ok
+          ? "ok"
+          : event.status === 404 || event.status === 410
+            ? "gone"
+            : "unverified";
+        log.info(`  verify ${label} ${event.url}`);
         break;
+      }
       case "inspect":
-        log.info(`  inspect ${event.ok ? "ok" : "skipped"} ${event.candidateId}`);
+        log.info(
+          `  inspect ${event.ok ? "ok" : "skipped"} ${event.candidateId}${event.reason ? ` (${event.reason})` : ""}`,
+        );
         break;
       case "done":
         break;
@@ -177,6 +188,7 @@ async function main(): Promise<void> {
     allowPositionals: true,
     options: {
       deep: { type: "boolean", default: false },
+      explore: { type: "boolean", default: false },
       provider: { type: "string" },
       model: { type: "string" },
       sources: { type: "string" },
@@ -195,8 +207,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mode = positionals[0] === "explore" ? "explore" : "validate";
-  const subject = (mode === "explore" ? positionals.slice(1) : positionals).join(" ").trim();
+  const usesSubcommand = positionals[0] === "explore";
+  const mode = values.explore || usesSubcommand ? "explore" : "validate";
+  const subject = (usesSubcommand ? positionals.slice(1) : positionals).join(" ").trim();
   if (!subject) {
     process.stderr.write(HELP);
     process.exitCode = 1;
@@ -225,9 +238,15 @@ async function main(): Promise<void> {
   const write = !values["no-write"];
 
   if (mode === "explore") {
-    if (values.deep) log.warn("[githubpill] --deep has no effect in explore mode");
-    const { report, errors, dropped } = await explore({ topic: subject, llm, config, adapters, onProgress });
-    reportWarnings(log, errors, dropped);
+    const { report, errors, dropped, unverified } = await explore({
+      topic: subject,
+      llm,
+      config,
+      adapters,
+      onProgress,
+      ...(values.deep ? { deep: {} } : {}),
+    });
+    reportWarnings(log, errors, dropped, unverified);
     const base = `${report.generatedAt.slice(0, 10)}-explore-${slugify(report.sharpened)}`;
     const written = await writeReports(values.out, base, write, flags, {
       markdown: renderExplorationMarkdown(report),
@@ -238,7 +257,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const { report, errors, dropped } = await validate({
+  const { report, errors, dropped, unverified } = await validate({
     idea: subject,
     llm,
     config,
@@ -246,7 +265,7 @@ async function main(): Promise<void> {
     onProgress,
     ...(values.deep ? { deep: {} } : {}),
   });
-  reportWarnings(log, errors, dropped);
+  reportWarnings(log, errors, dropped, unverified);
   const base = `${report.generatedAt.slice(0, 10)}-${slugify(report.sharpened)}`;
   const written = await writeReports(values.out, base, write, flags, {
     markdown: renderMarkdown(report),
@@ -260,6 +279,7 @@ function reportWarnings(
   log: Logger,
   errors: readonly { source: string; query: string; message: string }[],
   dropped: readonly unknown[],
+  unverified: readonly unknown[],
 ): void {
   if (errors.length > 0) {
     log.warn(`[githubpill] ${errors.length} query/queries failed and were skipped:`);
@@ -268,7 +288,12 @@ function reportWarnings(
     }
   }
   if (dropped.length > 0) {
-    log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that failed verification.`);
+    log.warn(`[githubpill] dropped ${dropped.length} candidate(s) that no longer exist (404).`);
+  }
+  if (unverified.length > 0) {
+    log.warn(
+      `[githubpill] ${unverified.length} candidate(s) could not be verified (rate limit?) — kept as unverified.`,
+    );
   }
 }
 

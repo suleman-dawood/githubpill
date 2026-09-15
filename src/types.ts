@@ -98,6 +98,7 @@ export interface ReportStats {
   candidatesReported: number;
   citationsChecked: number;
   citationsAlive: number;
+  citationsUnverified?: number;
   clonesAttempted?: number;
   clonesSucceeded?: number;
 }
@@ -177,6 +178,10 @@ export interface ExplorationCandidate {
   language?: string;
   lastActivity?: string;
   verifiedAt?: string;
+  /** True when the candidate was cloned and inspected (deep mode). */
+  inspected?: boolean;
+  /** File-path evidence from the clone; only present after deep inspection. */
+  evidence?: EvidenceCite[];
 }
 
 export interface ExplorationReport {
@@ -189,6 +194,7 @@ export interface ExplorationReport {
   candidates: ExplorationCandidate[];
   sourceRuns: SourceRun[];
   stats: ReportStats;
+  depth?: "quick" | "deep";
   generatedAt: string;
 }
 
@@ -198,8 +204,8 @@ export type ProgressEvent =
   | { type: "stage"; stage: PipelineStage }
   | { type: "search"; source: SourceId; query: string; hits: number }
   | { type: "ranked"; count: number }
-  | { type: "verify"; url: string; ok: boolean }
-  | { type: "inspect"; candidateId: string; ok: boolean }
+  | { type: "verify"; url: string; ok: boolean; status?: number | null }
+  | { type: "inspect"; candidateId: string; ok: boolean; reason?: string }
   | { type: "done"; band?: VerdictBand };
 
 export type ProgressHandler = (event: ProgressEvent) => void;

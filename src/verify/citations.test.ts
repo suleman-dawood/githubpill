@@ -36,6 +36,17 @@ describe("verifyCandidates", () => {
     expect(result.alive).toBe(1);
   });
 
+  it("keeps candidates whose check was inconclusive", async () => {
+    const result = await verifyCandidates(
+      [candidate],
+      [new FakeAdapter({ verifyStatus: 403 })],
+      testConfig(),
+    );
+    expect(result.candidates).toHaveLength(1);
+    expect(result.unverified).toHaveLength(1);
+    expect(result.dropped).toHaveLength(0);
+  });
+
   it("passes through candidates with no matching adapter", async () => {
     const result = await verifyCandidates(
       [{ ...candidate, sources: ["npm"] }],

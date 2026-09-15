@@ -1,11 +1,11 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { inspectCandidates } from "./inspect.js";
 import type { Cloner } from "./clone.js";
 import { FakeLLM, testConfig } from "../testing/fakes.js";
-import type { QueryPlan, ReportCandidate } from "../types.js";
+import type { Candidate, QueryPlan } from "../types.js";
 
 const plan: QueryPlan = {
   sharpened: "a todo cli",
@@ -15,17 +15,18 @@ const plan: QueryPlan = {
   preservedTerms: [],
 };
 
-function candidate(overrides: Partial<ReportCandidate> = {}): ReportCandidate {
+const tmpDirs: string[] = [];
+afterAll(() => Promise.all(tmpDirs.map((dir) => rm(dir, { recursive: true, force: true }))));
+
+function candidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
     id: "acme/demo",
     name: "acme/demo",
     url: "https://github.com/acme/demo",
     description: "demo",
     sources: ["github"],
-    label: "WORTH_INSPECTING",
-    axisScores: { coreFunction: 2, targetAudience: 2, scope: 2, approach: 2, activity: 2 },
-    axisSum: 10,
-    rationale: "metadata",
+    matchedQueries: ["a todo cli"],
+    score: 1,
     ...overrides,
   };
 }
@@ -33,6 +34,7 @@ function candidate(overrides: Partial<ReportCandidate> = {}): ReportCandidate {
 const cloner: Cloner = {
   async clone() {
     const root = await mkdtemp(join(tmpdir(), "ghp-inspect-"));
+    tmpDirs.push(root);
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "main.ts"), "a\nb\nc\n");
     return root;
@@ -50,7 +52,7 @@ function deepJudge(evidence: unknown[]): FakeLLM {
 }
 
 describe("inspectCandidates", () => {
-  it("replaces the metadata judgement with file evidence", async () => {
+  it("returns file evidence for a cloned candidate", async () => {
     const result = await inspectCandidates({
       candidates: [candidate()],
       plan,
@@ -59,14 +61,11 @@ describe("inspectCandidates", () => {
       deep: { cloner },
     });
 
-    const first = result.candidates[0];
-    expect(first?.inspected).toBe(true);
-    expect(first?.evidence).toEqual([{ path: "src/main.ts", line: 1, note: "entry" }]);
-    expect(first?.label).toBe("LIKELY_MATCH");
     expect(result.succeeded).toBe(1);
+    expect(result.inspections[0]?.evidence).toEqual([{ path: "src/main.ts", line: 1, note: "entry" }]);
   });
 
-  it("caps the label when no citation survives", async () => {
+  it("drops citations that do not resolve", async () => {
     const result = await inspectCandidates({
       candidates: [candidate()],
       plan,
@@ -75,11 +74,10 @@ describe("inspectCandidates", () => {
       deep: { cloner },
     });
 
-    expect(result.candidates[0]?.evidence).toEqual([]);
-    expect(result.candidates[0]?.label).toBe("WORTH_INSPECTING");
+    expect(result.inspections[0]?.evidence).toEqual([]);
   });
 
-  it("keeps the metadata judgement when cloning fails", async () => {
+  it("records a clone failure without throwing", async () => {
     const failing: Cloner = {
       clone: async () => {
         throw new Error("clone failed");
@@ -94,8 +92,7 @@ describe("inspectCandidates", () => {
       deep: { cloner: failing },
     });
 
-    expect(result.candidates[0]?.inspected).toBeUndefined();
-    expect(result.candidates[0]?.rationale).toBe("metadata");
+    expect(result.inspections).toHaveLength(0);
     expect(result.attempted).toBe(1);
     expect(result.succeeded).toBe(0);
   });

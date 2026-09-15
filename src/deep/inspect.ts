@@ -1,16 +1,8 @@
 import type { Config } from "../config.js";
-import type {
-  AxisScores,
-  EvidenceCite,
-  MatchLabel,
-  ProgressHandler,
-  QueryPlan,
-  ReportCandidate,
-} from "../types.js";
+import type { AxisScores, Candidate, EvidenceCite, ProgressHandler, QueryPlan } from "../types.js";
 import type { LLMClient } from "../synthesis/providers/types.js";
 import { AXIS_GUIDE } from "../synthesis/schema.js";
 import { DeepJudgeSchema } from "../synthesis/deep-schema.js";
-import { axisSum, deriveLabel } from "../synthesis/verdict.js";
 import { checkCitations } from "./cites.js";
 import { cleanupClone, gitCloner, type Cloner } from "./clone.js";
 import { selectSourceFiles, type SourceFile } from "./files.js";
@@ -31,7 +23,7 @@ export interface DeepInspection {
 }
 
 export interface DeepResult {
-  candidates: ReportCandidate[];
+  inspections: DeepInspection[];
   attempted: number;
   succeeded: number;
 }
@@ -45,7 +37,7 @@ const SYSTEM = [
   "Only cite files that appear below. Do not invent paths.",
 ].join(" ");
 
-function isCloneable(candidate: ReportCandidate): boolean {
+export function isCloneable(candidate: Candidate): boolean {
   return /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(candidate.url.replace(/\/$/, ""));
 }
 
@@ -54,7 +46,7 @@ function fileBlock(file: SourceFile, source: string): string {
 }
 
 export function buildDeepPrompt(
-  candidate: ReportCandidate,
+  candidate: Candidate,
   plan: QueryPlan,
   files: readonly SourceFile[],
 ): string {
@@ -74,7 +66,7 @@ export function buildDeepPrompt(
 }
 
 async function inspectCandidate(params: {
-  candidate: ReportCandidate;
+  candidate: Candidate;
   plan: QueryPlan;
   llm: LLMClient;
   cloner: Cloner;
@@ -103,18 +95,13 @@ async function inspectCandidate(params: {
   }
 }
 
-/** A strong match needs file evidence; without any, cap the label. */
-function capWithoutEvidence(label: MatchLabel): MatchLabel {
-  return label === "LIKELY_MATCH" ? "WORTH_INSPECTING" : label;
-}
-
 /**
- * Clone and inspect the strongest cloneable candidates, replacing their
- * metadata judgement with file-path evidence. Failures are non-fatal: the
- * candidate keeps its metadata judgement.
+ * Clone and inspect the strongest cloneable candidates, returning file-path
+ * evidence per candidate. Failures are non-fatal: the caller keeps whatever it
+ * already had for that candidate.
  */
 export async function inspectCandidates(options: {
-  candidates: readonly ReportCandidate[];
+  candidates: readonly Candidate[];
   plan: QueryPlan;
   llm: LLMClient;
   config: Config;
@@ -130,10 +117,10 @@ export async function inspectCandidates(options: {
 
   const targets = options.candidates
     .filter(isCloneable)
-    .sort((a, b) => b.axisSum - a.axisSum)
+    .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  const byId = new Map(options.candidates.map((candidate) => [candidate.id, candidate]));
+  const inspections: DeepInspection[] = [];
   let attempted = 0;
   let succeeded = 0;
 
@@ -149,22 +136,18 @@ export async function inspectCandidates(options: {
         maxFileLines,
         timeoutMs,
       });
-      const label = deriveLabel(inspection.axisScores);
-      byId.set(target.id, {
-        ...target,
-        axisScores: inspection.axisScores,
-        axisSum: axisSum(inspection.axisScores),
-        label: inspection.evidence.length > 0 ? label : capWithoutEvidence(label),
-        rationale: inspection.rationale,
-        evidence: inspection.evidence,
-        inspected: true,
-      });
+      inspections.push(inspection);
       succeeded += 1;
       options.onProgress?.({ type: "inspect", candidateId: target.id, ok: true });
-    } catch {
-      options.onProgress?.({ type: "inspect", candidateId: target.id, ok: false });
+    } catch (error) {
+      options.onProgress?.({
+        type: "inspect",
+        candidateId: target.id,
+        ok: false,
+        reason: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
-  return { candidates: [...byId.values()], attempted, succeeded };
+  return { inspections, attempted, succeeded };
 }

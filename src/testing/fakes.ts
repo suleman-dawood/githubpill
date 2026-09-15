@@ -44,6 +44,8 @@ export interface FakeAdapterOptions {
   id?: SourceId;
   hits?: RawHit[];
   verifyOk?: boolean;
+  /** Explicit verify status, e.g. 403 to simulate a rate limit. */
+  verifyStatus?: number;
 }
 
 export class FakeAdapter implements SourceAdapter {
@@ -60,8 +62,12 @@ export class FakeAdapter implements SourceAdapter {
   }
 
   async verify(_candidate: Candidate, _options: SearchOptions): Promise<Verification> {
-    const ok = this.options.verifyOk ?? true;
-    return { ok, status: ok ? 200 : 404, checkedAt: new Date().toISOString() };
+    const status = this.options.verifyStatus ?? ((this.options.verifyOk ?? true) ? 200 : 404);
+    return {
+      ok: status >= 200 && status < 400,
+      status,
+      checkedAt: new Date().toISOString(),
+    };
   }
 }
 

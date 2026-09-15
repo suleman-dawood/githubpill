@@ -25,6 +25,14 @@ describe("GeminiClient", () => {
     expect(result).toEqual({ answer: "ok" });
     expect(server.requests[0]?.headers["x-goog-api-key"]).toBe("test-key");
     expect(server.requests[0]?.path).toContain("/models/test-model:generateContent");
+
+    // Gemini gets JSON mime type but no enforced schema, so the prompt carries it.
+    const body = server.requests[0]?.body as {
+      contents: Array<{ parts: Array<{ text: string }> }>;
+    };
+    const prompt = body.contents[0]?.parts[0]?.text ?? "";
+    expect(prompt).toMatch(/JSON Schema/i);
+    expect(prompt).toContain('"answer"');
   });
 
   it("surfaces provider errors with their status", async () => {

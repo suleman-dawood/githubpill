@@ -2,7 +2,13 @@ import { httpPost, parseJson } from "../../adapters/http.js";
 import { ProviderError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
 import { errorMessage } from "./response.js";
-import { parseStructuredText, toStrictJsonSchema, validateStructured, withStructuredRetry } from "./structured.js";
+import {
+  parseStructuredText,
+  toStrictJsonSchema,
+  validateStructured,
+  withJsonSchemaInstruction,
+  withStructuredRetry,
+} from "./structured.js";
 import type { LLMClient, ProviderOptions, StructuredRequest } from "./types.js";
 
 export type JsonMode = "json_schema" | "json_object";
@@ -76,10 +82,13 @@ export class OpenAICompatibleClient implements LLMClient {
     return parseStructuredText(message.content, this.provider);
   }
 
-  /** JSON-object mode needs the word "json" in the prompt, so say it plainly. */
+  /**
+   * JSON-object mode has no enforced schema, so the prompt must carry the
+   * schema (and the word "json", which DeepSeek requires).
+   */
   private userPrompt(request: StructuredRequest<unknown>): string {
     if (this.options.jsonMode === "json_object") {
-      return `${request.prompt}\n\nRespond with a single JSON object and nothing else.`;
+      return withJsonSchemaInstruction(request.prompt, request.schema);
     }
     return request.prompt;
   }

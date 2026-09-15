@@ -28,6 +28,11 @@ export function deriveBand(labels: readonly MatchLabel[]): VerdictBand {
   return "green";
 }
 
+/** A strong match needs file evidence; without any, cap the label. */
+export function capWithoutEvidence(label: MatchLabel): MatchLabel {
+  return label === "LIKELY_MATCH" ? "WORTH_INSPECTING" : label;
+}
+
 export function headlineFor(band: VerdictBand, count: number): string {
   const plural = count === 1 ? "" : "s";
   switch (band) {
