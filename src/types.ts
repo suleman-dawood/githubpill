@@ -1,7 +1,7 @@
 export const SOURCE_IDS = ["github", "npm", "pypi", "hackernews"] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
-export const PROVIDER_IDS = ["anthropic", "openai", "gemini", "deepseek"] as const;
+export const PROVIDER_IDS = ["anthropic", "openai", "gemini", "deepseek", "host"] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
 /**

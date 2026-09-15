@@ -44,7 +44,7 @@ Flags:
 |---|---|
 | `--deep` | clone top candidates and cite `path:LINE` evidence |
 | `--explore` | explore a space instead of validating an idea |
-| `--provider <id>` | LLM provider: `anthropic`, `openai`, `gemini`, `deepseek` |
+| `--provider <id>` | LLM provider: `anthropic`, `openai`, `gemini`, `deepseek`, `host` |
 | `--json` / `--html` | also write machine-readable / self-contained HTML reports |
 | `--out <dir>` | output directory (default `githubpill-reports`) |
 | `--sources github,npm,pypi,hackernews` | restrict sources |
@@ -54,12 +54,24 @@ Flags:
 
 ## Requirements
 
-- One LLM API key — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+An LLM, in one of two ways:
+
+- **The host agent itself (no API key).** If no API key is set, the CLI falls
+  back to the `host` provider and drives the installed agentic CLI
+  (`claude`, `opencode`, `codex`, or `pi`) to do the reasoning. This is the
+  zero-config path: the user's existing agent does the LLM work.
+- **An API key** — `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
   `GEMINI_API_KEY` / `GOOGLE_API_KEY`, or `DEEPSEEK_API_KEY`. Auto-detected, or
   set with `--provider`.
+
+Also:
+
 - `GITHUB_TOKEN` or `GH_TOKEN` — optional but strongly recommended; raises the
   GitHub rate limits. Falls back to `gh auth token`.
 - Node.js ≥ 20.
+
+Query generation uses the same LLM when one is available; set
+`GITHUBPILL_LLM_QUERIES=0` to use the built-in heuristic planner instead.
 
 ## Present the result
 

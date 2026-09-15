@@ -39,8 +39,22 @@ describe("loadConfig", () => {
     );
   });
 
-  it("throws when no key is present", () => {
-    expect(() => loadConfig({}, noGh)).toThrow(ConfigError);
+  it("falls back to the host provider when no key is present", () => {
+    expect(loadConfig({}, noGh).llm.provider).toBe("host");
+  });
+
+  it("accepts an explicit host provider without a key", () => {
+    expect(loadConfig({ GITHUBPILL_PROVIDER: "host" }, noGh).llm.provider).toBe("host");
+  });
+
+  it("reads GITHUBPILL_AGENT for the host provider", () => {
+    const config = loadConfig({ GITHUBPILL_PROVIDER: "host", GITHUBPILL_AGENT: "opencode" }, noGh);
+    expect(config.llm.agent).toBe("opencode");
+  });
+
+  it("generates queries with the LLM by default, unless disabled", () => {
+    expect(loadConfig({ OPENAI_API_KEY: "k" }, noGh).llmQueries).toBe(true);
+    expect(loadConfig({ OPENAI_API_KEY: "k", GITHUBPILL_LLM_QUERIES: "0" }, noGh).llmQueries).toBe(false);
   });
 
   it("names the missing key when the provider is explicit", () => {

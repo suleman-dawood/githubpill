@@ -37,6 +37,7 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
   const retrieval = await retrieve({
     idea: options.idea,
     config: options.config,
+    llm: options.llm,
     adapters: options.adapters,
     onProgress: progress,
     signal: options.signal,

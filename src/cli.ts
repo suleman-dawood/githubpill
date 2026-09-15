@@ -42,11 +42,14 @@ Providers and API keys (first key found selects the provider):
   openai      OPENAI_API_KEY                     default model ${DEFAULT_MODELS.openai}
   gemini      GEMINI_API_KEY or GOOGLE_API_KEY   default model ${DEFAULT_MODELS.gemini}
   deepseek    DEEPSEEK_API_KEY                   default model ${DEFAULT_MODELS.deepseek}
+  host        (no key) uses an installed agentic CLI: claude, opencode, codex, pi
 
 Other environment:
   GITHUB_TOKEN / GH_TOKEN   Optional; raises GitHub rate limits (falls back to \`gh auth token\`)
   GITHUBPILL_PROVIDER       Force a provider instead of auto-detecting
   GITHUBPILL_MODEL          Override the model id
+  GITHUBPILL_AGENT          Agentic CLI for the host provider (claude|opencode|codex|pi)
+  GITHUBPILL_LLM_QUERIES    Set to 0 to use the heuristic query planner
   GITHUBPILL_LOG            silent | error | warn | info | debug
 
 Examples:
