@@ -1,18 +1,17 @@
 # GithubPill for pi
 
-The GithubPill skill is harness-neutral (Agent Skills standard). This directory
-holds everything needed to run it inside [pi](https://github.com/badlogic/pi),
-the agent harness that implements that standard.
+The GithubPill skill follows the Agent Skills standard and is host-neutral.
+This directory holds the extras that let it run inside
+[pi](https://github.com/badlogic/pi): a subagent tool for parallel deep-search
+judging, and the judge agent definition.
 
 ## What gets installed
 
 | Piece | Source | Installed to | Purpose |
 |---|---|---|---|
-| The skill | `skills/githubpill/` | `~/.pi/agent/skills/githubpill` | The protocol (same SKILL.md + references Claude Code uses) |
-| Clone-safety spawn hook | `pi/extensions/githubpill-safe-clone-guard.ts` | `~/.pi/agent/extensions/` | Port of `hooks/safe-clone-guard.sh` — rewrites `git clone` with the safety contract, denies oversize repos |
-| Subagent tool | `pi/extensions/githubpill-subagent/` | `~/.pi/agent/extensions/` | Port of Claude Code's Task tool — parallel judge dispatch for deep search |
+| The skill | `skills/githubpill/` | `~/.pi/agent/skills/githubpill` | The protocol (same SKILL.md + references + scripts every host uses) |
+| Subagent tool | `pi/extensions/githubpill-subagent/` | `~/.pi/agent/extensions/` | Parallel judge dispatch for deep search — the pi analog of Claude Code's Task tool |
 | Deep-search judge agent | `pi/agents/githubpill-judge.md` | `~/.pi/agent/agents/` | Standing instructions for per-candidate deep-search judging |
-| Guard logic | `pi/scripts/safe-clone-guard.sh` | — (called by the extension) | Harness-agnostic clone-safety contract, unit-tested in CI |
 
 ## Install
 
@@ -29,56 +28,47 @@ Uninstall: `bash pi/uninstall.sh`.
 /skill:githubpill I want to build a CLI that previews diffs as a side-by-side TUI
 ```
 
-or just describe an idea naturally — "is there already a tool that does X",
+Or describe an idea naturally — "is there already a tool that does X",
 "validate my idea before I start building". Reports land in
-`./githubpill-reports/YYYY-MM-DD-<slug>.md`, one per idea, same as Claude Code.
+`./githubpill-reports/YYYY-MM-DD-<slug>.md`, one per idea, same as every host.
 
 ## Prerequisites
 
 - `gh` ≥ 2.55, authenticated (`gh auth login`)
 - `jq` ≥ 1.7
-- A web-search tool enabled in your pi session (e.g. the `websearch`
-  extension). The skill's web cross-check **aborts** without one.
+- A web-search tool enabled in your pi session. The skill's web cross-check
+  **aborts** without one.
 - `bash` ≥ 4 (GNU coreutils on macOS for `timeout`)
 
 ## Mapping: Claude Code → pi
 
-| Claude Code | pi |
-|---|---|
-| `/plugin marketplace add suleman-dawood/githubpill` | `bash pi/install.sh` |
-| `/githubpill <idea>` | `/skill:githubpill <idea>` (or description trigger) |
-| `WebSearch` tool | `websearch` tool (pi) |
-| `Task` tool (subagents) | `subagent` tool (installed by this port) |
-| `PreToolUse` hook `safe-clone-guard.sh` | bash spawn-hook extension |
-| `allowed-tools` frontmatter | ignored by pi (experimental field); tool access is governed by pi's own tool config |
-| `.claude-plugin/` marketplace | not needed — a skill is a directory |
+| Capability | Claude Code | pi |
+|---|---|---|
+| Invoke | `/githubpill <idea>` | `/skill:githubpill <idea>` (or description trigger) |
+| Web search | `WebSearch` tool | your web-search tool |
+| Subagents | `Task` tool | `subagent` tool (installed by this port) |
+| Clone safety | `scripts/safe-clone.sh` | `scripts/safe-clone.sh` (identical) |
+| Distribution | `.claude-plugin/` marketplace | a skill is a directory; symlink it |
 
 ## Design notes
 
-- **One canonical skill.** The protocol (`skills/githubpill/SKILL.md` +
-  `references/`) is shared across harnesses. The only harness-specific bits are
-  the execution surfaces: Claude Code's hook/Task/WebSearch vs. pi's
-  extensions/tools. Do not fork the skill per harness.
-- **Safety logic stays in bash.** `pi/scripts/safe-clone-guard.sh` implements
-  the same contract as `hooks/safe-clone-guard.sh` as a plain script, so CI can
-  unit-test it with mocked `gh` and the TS extension stays a thin adapter. Keep
-  the regexes and flags in sync between the two.
-- **Deep search degrades gracefully.** The skill's Step DEEP-F uses the host's
-  subagent tool when present (`subagent` on pi). Without it, the skill judges
-  candidates sequentially in-session — the parallelism is a latency
-  optimization, not a correctness requirement.
+- **One canonical skill.** The protocol (`skills/githubpill/`) is shared
+  across hosts. Host-specific differences are execution surfaces only —
+  never fork the skill.
+- **Clone safety is a property of the clone script.** `safe-clone.sh`
+  enforces the size cap, partial-clone flags, and timeout itself, so every
+  host gets the same guarantees without a per-host interception hook.
+- **Deep search degrades gracefully.** The deep-search judge uses the host's
+  subagent tool when present. Without it, the skill judges candidates
+  sequentially in-session — the parallelism is a latency optimization, not a
+  correctness requirement.
 
 ## Tests
 
 ```bash
-bash tests/run-all-tests.sh        # unit tests incl. pi guard + pi install structure
-bash tests/run-goldens-pi.sh       # live goldens via the pi CLI (needs gh + LLM budget)
+bash tests/run-all-tests.sh    # unit tests, incl. the pi structural checks
 ```
 
-The pi-specific unit tests:
-
-- `tests/test-pi-safe-clone-guard.sh` — exercises `pi/scripts/safe-clone-guard.sh`
-  against mocked `gh` (rewrite / deny / size-cap override / pass-through / ssh form).
-- `tests/test-pi-install.sh` — structural validation of the pi tree (files
-  present, executable, no `$CLAUDE_PLUGIN_ROOT` leaks into the skill, SKILL.md
-  references intact).
+`tests/test-pi-install.sh` validates this tree: files present and executable,
+the canonical skill free of host-specific leakage, frontmatter and reference
+wiring intact, and install/uninstall symmetry.

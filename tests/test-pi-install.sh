@@ -3,7 +3,7 @@
 #
 # Verifies that the pi port is complete and self-consistent:
 #  - every pi file exists and is executable where required
-#  - the canonical skill has no harness-specific leakage ($CLAUDE_PLUGIN_ROOT)
+#  - the canonical skill has no host-specific leakage ($CLAUDE_PLUGIN_ROOT)
 #  - the skill frontmatter and reference wiring are intact
 #  - install.sh / uninstall.sh are executable and symmetric
 set -euo pipefail
@@ -17,8 +17,6 @@ _log "=== test-pi-install ==="
 
 # ---------- 1. pi tree structure ----------
 for f in \
-  "pi/scripts/safe-clone-guard.sh" \
-  "pi/extensions/githubpill-safe-clone-guard.ts" \
   "pi/extensions/githubpill-subagent/index.ts" \
   "pi/agents/githubpill-judge.md" \
   "pi/install.sh" \
@@ -28,7 +26,7 @@ for f in \
 done
 
 # Executables (any executable permission, not an exact mode)
-for f in "pi/scripts/safe-clone-guard.sh" "pi/install.sh" "pi/uninstall.sh"; do
+for f in "pi/install.sh" "pi/uninstall.sh"; do
   if [ -x "$ROOT/$f" ]; then
     _log "  PASS $f executable"
   else
@@ -39,7 +37,7 @@ for f in "pi/scripts/safe-clone-guard.sh" "pi/install.sh" "pi/uninstall.sh"; do
 done
 
 # Shebangs + strict mode
-for f in "pi/scripts/safe-clone-guard.sh" "pi/install.sh" "pi/uninstall.sh"; do
+for f in "pi/install.sh" "pi/uninstall.sh"; do
   FIRST=$(head -n1 "$ROOT/$f")
   assert_eq "#!/usr/bin/env bash" "$FIRST" "$f shebang"
   if grep -qE '^set -euo pipefail' "$ROOT/$f"; then
@@ -51,20 +49,6 @@ for f in "pi/scripts/safe-clone-guard.sh" "pi/install.sh" "pi/uninstall.sh"; do
 done
 
 # ---------- 2. extension wiring ----------
-EXT_TS="$ROOT/pi/extensions/githubpill-safe-clone-guard.ts"
-if grep -q "createBashTool" "$EXT_TS" && grep -q "spawnHook" "$EXT_TS" && grep -q "registerTool" "$EXT_TS"; then
-  _log "  PASS safe-clone-guard.ts uses createBashTool + spawnHook + registerTool"
-else
-  _log "  FAIL safe-clone-guard.ts missing spawn-hook wiring"
-  TESTS_FAILED=$((TESTS_FAILED + 1))
-fi
-if grep -q "safe-clone-guard.sh" "$EXT_TS"; then
-  _log "  PASS safe-clone-guard.ts delegates to pi/scripts/safe-clone-guard.sh"
-else
-  _log "  FAIL safe-clone-guard.ts does not reference the guard script"
-  TESTS_FAILED=$((TESTS_FAILED + 1))
-fi
-
 SUB_TS="$ROOT/pi/extensions/githubpill-subagent/index.ts"
 if grep -q 'name: "subagent"' "$SUB_TS" && grep -q "githubpill-judge\|parseFrontmatter" "$SUB_TS"; then
   _log "  PASS subagent extension registers subagent tool with agent discovery"
@@ -92,7 +76,7 @@ else
   FAILED_CASES+=("judge agent name mismatch")
 fi
 
-# ---------- 4. skill tree is harness-neutral ----------
+# ---------- 4. skill tree is host-neutral ----------
 if grep -rn "CLAUDE_PLUGIN_ROOT" "$ROOT/skills/githubpill" >/dev/null 2>&1; then
   _log "  FAIL \$CLAUDE_PLUGIN_ROOT leaked into canonical skill"
   TESTS_FAILED=$((TESTS_FAILED + 1))
@@ -100,7 +84,7 @@ else
   _log "  PASS no \$CLAUDE_PLUGIN_ROOT in skills/githubpill"
 fi
 
-# The canonical skill must stay harness-neutral: it names the capability
+# The canonical skill must stay host-neutral: it names the capability
 # (subagent tool, web-search tool) rather than one host's tool identifier.
 if grep -qi "subagent" "$ROOT/skills/githubpill/SKILL.md"; then
   _log "  PASS SKILL.md names the subagent tool (deep-search dispatch)"
@@ -129,7 +113,7 @@ done
 # ---------- 6. install/uninstall symmetry ----------
 INSTALL="$ROOT/pi/install.sh"
 UNINSTALL="$ROOT/pi/uninstall.sh"
-for needle in "agent/skills/githubpill" "githubpill-safe-clone-guard.ts" "githubpill-subagent" "githubpill-judge.md"; do
+for needle in "agent/skills/githubpill" "githubpill-subagent" "githubpill-judge.md"; do
   if grep -qF "$needle" "$INSTALL" && grep -qF "$needle" "$UNINSTALL"; then
     _log "  PASS install/uninstall both handle: $needle"
   else

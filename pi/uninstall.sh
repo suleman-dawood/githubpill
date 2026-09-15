@@ -29,7 +29,6 @@ remove_link() {
 echo "Uninstalling GithubPill pi port from $PI_HOME:"
 
 remove_link "$PI_HOME/agent/skills/githubpill"
-remove_link "$PI_HOME/agent/extensions/githubpill-safe-clone-guard.ts"
 remove_link "$PI_HOME/agent/extensions/githubpill-subagent"
 remove_link "$PI_HOME/agent/agents/githubpill-judge.md"
 

@@ -2,10 +2,9 @@
 # install.sh — installs the GithubPill pi port into ~/.pi via symlinks.
 #
 # Installs:
-#   skills/githubpill/                       → ~/.pi/agent/skills/githubpill   (the skill)
-#   pi/extensions/githubpill-safe-clone-guard.ts → ~/.pi/agent/extensions/    (clone-safety bash spawn hook)
-#   pi/extensions/githubpill-subagent/       → ~/.pi/agent/extensions/        (subagent tool for deep-search judging)
-#   pi/agents/githubpill-judge.md            → ~/.pi/agent/agents/            (deep-search judge agent)
+#   skills/githubpill/                 → ~/.pi/agent/skills/githubpill   (the skill)
+#   pi/extensions/githubpill-subagent/ → ~/.pi/agent/extensions/        (subagent tool for deep-search judging)
+#   pi/agents/githubpill-judge.md      → ~/.pi/agent/agents/            (deep-search judge agent)
 #
 # Symlinks (not copies) so the installed port tracks this repo checkout.
 # Restart pi (or run /reload) after installing. Uninstall: bash pi/uninstall.sh
@@ -29,7 +28,6 @@ link() {
 echo "Installing GithubPill pi port (symlinks into $PI_HOME):"
 
 link "$ROOT/skills/githubpill" "$SKILLS_DIR/githubpill"
-link "$ROOT/pi/extensions/githubpill-safe-clone-guard.ts" "$EXT_DIR/githubpill-safe-clone-guard.ts"
 link "$ROOT/pi/extensions/githubpill-subagent" "$EXT_DIR/githubpill-subagent"
 link "$ROOT/pi/agents/githubpill-judge.md" "$AGENTS_DIR/githubpill-judge.md"
 
@@ -39,4 +37,4 @@ echo "Then invoke the skill with:  /skill:githubpill <idea>"
 echo "(or just describe an idea — 'is there already a tool that does X?')"
 echo ""
 echo "Prerequisites: gh >= 2.55 (gh auth login), jq >= 1.7, and a web-search"
-echo "tool enabled in your session (pi: the websearch extension)."
+echo "tool enabled in your session."
