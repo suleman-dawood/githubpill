@@ -26,7 +26,6 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 | `.claude-plugin/` | Claude Code marketplace manifest |
 | `install.sh` | Installs the skill into every detected agentic CLI |
 | `eval/` | Golden eval cases (harness to come) |
-| `docs/` | Example reports |
 
 ## Commands
 

@@ -1,76 +1,146 @@
 # GithubPill
 
-A Claude Code plugin that checks if your project idea already exists on GitHub before you build it.
+[![tests](https://github.com/suleman-dawood/githubpill/actions/workflows/tests.yml/badge.svg)](https://github.com/suleman-dawood/githubpill/actions/workflows/tests.yml)
+
+Prior-art reconnaissance for project ideas. Describe an idea; GithubPill
+searches several sources, synthesizes what it finds with an LLM, verifies
+every cited URL live, and returns a verdict:
 
 ```
-🟢  No close match
-🟡  Adjacent prior art — worth a closer look
+🟢  No close match — your idea looks novel
+🟡  Some overlap — worth a closer look
 🔴  Strong overlap — someone has likely shipped this
 ```
 
+## Why
+
+People build things that already exist because validation is usually a vibe.
+GithubPill answers "does this exist?" with evidence: multi-source retrieval, a
+scored overlap analysis, and citations that were checked live — dead links are
+dropped before they reach a report.
+
+## How it works
+
+```mermaid
+flowchart LR
+  Idea[Idea] --> Plan[Query planner]
+  Plan --> GH[GitHub]
+  Plan --> NPM[npm]
+  Plan --> PY[PyPI]
+  Plan --> HN[Hacker News]
+  GH --> Rank[Dedupe + rank]
+  NPM --> Rank
+  PY --> Rank
+  HN --> Rank
+  Rank --> Verify[Live verification]
+  Verify --> Synth[LLM synthesis]
+  Synth --> Verdict[Mechanical verdict]
+  Verdict --> Report[JSON / Markdown / HTML]
+```
+
+- **Adapters** (`src/adapters/`) are the only source-specific code. Each
+  implements one interface — `search` and `verify` — so adding a source is a
+  single file plus a registry entry.
+- **Retrieval** (`src/retrieval/`) plans queries, fans out with bounded
+  concurrency, isolates per-query failures, then dedupes by canonical URL and
+  ranks by how many independent searches surfaced each candidate.
+- **Synthesis** (`src/synthesis/`) sends the candidates to an LLM and gets
+  back axis scores plus rationale, validated against a Zod schema. The LLM
+  never emits a verdict label: labels and the overall band are derived
+  mechanically from the scores, so identical scores always give identical
+  verdicts.
+- **Verification** (`src/verify/`) re-checks every candidate live and drops the
+  ones that fail — the citation-integrity gate.
+- **Reports** (`src/report/`) render JSON, Markdown, and a self-contained HTML
+  report with verification badges and axis bars.
+
 ## Install
 
-> Run these inside the Claude Code chat.
-
-```
-/plugin marketplace add suleman-dawood/githubpill
-/plugin install githubpill@githubpill
+```bash
+npm install -g githubpill
 ```
 
-> Fully quit and reopen Claude Code so the plugin registers (not `/clear`, you need to actually close the app process).
-
-## Prerequisites
-
-- **gh auth login** — authenticated GitHub CLI session
-- gh ≥ 2.55
-- jq ≥ 1.7
-- **WebSearch tool must be enabled** in your Claude Code session
-- macOS: `brew install bash coreutils (GNU timeout + bash` ≥ 4)
-
-Verify:
-
-```
-gh auth status && gh --version && jq --version
-```
-
-Use:
-
-```
-/githubpill I want to build a CLI that previews diffs as a side-by-side TUI
-```
-
-Or just describe an idea naturally in chat:
-
-- "is there already a tool that does X"
-- "validate my idea before I start building"
-
-You get a verdict in 60 seconds. If it's 🟡 or 🔴, you can go for a deep search to clone the top candidates and get file-path-cited evidence (~5 min).
-
-Reports land in `./githubpill-reports/YYYY-MM-DD-<slug>.md`. One file per idea.
-
-## pi support
-
-GithubPill also runs inside [pi](https://github.com/badlogic/pi), which
-implements the same Agent Skills standard. The protocol is one canonical
-skill (`skills/githubpill/`); only the execution surfaces differ (pi has no
-PreToolUse hooks or Task tool, so the port ships equivalents as extensions).
+Requires Node ≥ 20 and an LLM key:
 
 ```bash
-bash pi/install.sh        # symlinks skill + extensions + judge agent into ~/.pi
-# restart pi, or run /reload
+export ANTHROPIC_API_KEY=...        # required for synthesis
+export GITHUB_TOKEN=...             # optional; raises GitHub rate limits
 ```
 
-Use it the same way — `/skill:githubpill <idea>` or just describe an idea.
-Deep search parallelizes its per-candidate judges via a `subagent` tool and
-the `githubpill-judge` agent; clone safety is enforced by a bash spawn-hook
-extension that runs the same contract as the Claude Code hook. See
-[`pi/README.md`](pi/README.md) for the full mapping and tests.
+Without `GITHUB_TOKEN`, GithubPill falls back to your `gh auth token`. The
+GitHub search API is heavily rate-limited when anonymous, so a token is
+strongly recommended.
+
+## Use
+
+```bash
+githubpill "a CLI that previews diffs as a side-by-side TUI"
+```
+
+```bash
+githubpill --json --html "a self-hosted RSS reader"   # extra report formats
+githubpill --sources github,npm "a dotfiles manager"  # restrict sources
+githubpill --out ./recon "an NDIS invoice validator"  # output directory
+```
+
+The verdict block goes to stdout; progress goes to stderr. Reports land in
+`githubpill-reports/` (one per idea):
+
+```
+🔴 This already exists — 3 strong matches found
+
+Your idea: "a CLI that previews diffs as a side-by-side TUI"
+- banga/git-split-diffs — LIKELY_MATCH (sum=13) https://github.com/banga/git-split-diffs
+- so-fancy/diff-so-fancy — WORTH_INSPECTING (sum=9) https://github.com/so-fancy/diff-so-fancy
+
+Report: githubpill-reports/2026-05-27-a-cli-that-previews-diffs-as-a-side-by-s.md
+```
+
+## Use from an agent
+
+The skill in `skills/githubpill/` is a thin wrapper that runs the CLI, so it
+works in any host that supports the Agent Skills standard — Claude Code,
+opencode, Codex CLI, Cursor, pi, and others. `install.sh` detects the CLIs on
+your machine and installs the skill into each:
+
+```bash
+bash install.sh            # every detected CLI, user scope
+bash install.sh --project  # this repo's agent configs
+bash install.sh --list     # show targets, install nothing
+```
+
+## Development
+
+```bash
+npm install
+npm run typecheck     # tsc --noEmit
+npm test              # vitest — offline, no network, no API keys
+npm run build         # emit dist/
+node dist/cli.js "an idea"
+```
+
+Tests never touch the network or an LLM: adapters are exercised with a mocked
+`fetch`, and the LLM client is exercised against a local mock server. See
+[AGENTS.md](./AGENTS.md) for the architecture rules.
+
+## Roadmap
+
+- **Eval harness** — golden cases in `eval/` (ideas with known competitors) run
+  on a schedule to measure recall@k, citation-integrity, and verdict accuracy.
+- **Retrieval depth** — embeddings + pgvector for semantic re-ranking.
+- **More sources** — crates.io, VS Code Marketplace, Product Hunt.
+- **Deep inspection** — clone top candidates and cite `file:LINE` evidence.
+- **Service surface** — a REST API, a job queue with progress, and a report
+  viewer over the same engine.
 
 ## Limitations
 
-- **GitHub-only.** GitLab, Codeberg, self-hosted forges, and package-registry-only tools are not searched currently.
-- **Verify before you decide.** GithubPill narrows the search; it doesn't replace you making the final call yourself before you commit to a project.
+- GitHub is searched with the repo-search API; very new or unindexed projects
+  can be missed.
+- npm and PyPI coverage depends on their public search; PyPI search is parsed
+  from the website because no JSON search API exists.
+- The verdict is decision support, not a substitute for your own judgment.
 
 ## License
 
-MIT :0 <- proof im human
+MIT — see [LICENSE](./LICENSE).
