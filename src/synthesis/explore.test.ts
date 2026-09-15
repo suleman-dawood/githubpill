@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { synthesizeExploration } from "./explore.js";
+import { buildExplorationPrompt, synthesizeExploration } from "./explore.js";
 import { FakeLLM } from "../testing/fakes.js";
 import type { Candidate, QueryPlan } from "../types.js";
 
@@ -61,5 +61,23 @@ describe("synthesizeExploration", () => {
     const result = await synthesizeExploration("topic", plan, [], new FakeLLM());
     expect(result.candidates).toHaveLength(0);
     expect(result.summary).toContain("No projects");
+  });
+
+  it("includes clone evidence in the prompt and on the candidate", async () => {
+    const llm = llmWith({
+      summary: "s",
+      clusters: [{ theme: "t", summary: "x", candidateIds: ["a/b"] }],
+      gaps: [],
+      directions: [{ idea: "i", why: "w", groundedIn: ["a/b"] }],
+    });
+    const evidence = new Map([["a/b", [{ path: "src/main.ts", line: 3, note: "entry" }]]]);
+
+    const result = await synthesizeExploration("topic", plan, [candidate], llm, evidence);
+
+    expect(result.candidates[0]?.inspected).toBe(true);
+    expect(result.candidates[0]?.evidence).toEqual([{ path: "src/main.ts", line: 3, note: "entry" }]);
+
+    const prompt = buildExplorationPrompt("topic", plan, [candidate], evidence);
+    expect(prompt).toContain("src/main.ts:3");
   });
 });

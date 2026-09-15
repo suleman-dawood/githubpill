@@ -178,6 +178,10 @@ export interface ExplorationCandidate {
   language?: string;
   lastActivity?: string;
   verifiedAt?: string;
+  /** True when the candidate was cloned and inspected (deep mode). */
+  inspected?: boolean;
+  /** File-path evidence from the clone; only present after deep inspection. */
+  evidence?: EvidenceCite[];
 }
 
 export interface ExplorationReport {
@@ -190,6 +194,7 @@ export interface ExplorationReport {
   candidates: ExplorationCandidate[];
   sourceRuns: SourceRun[];
   stats: ReportStats;
+  depth?: "quick" | "deep";
   generatedAt: string;
 }
 

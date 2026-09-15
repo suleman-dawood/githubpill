@@ -19,11 +19,13 @@ import type { ExplorationReport, ProgressEvent, Report } from "./types.js";
 const HELP = `githubpill — prior-art reconnaissance for project ideas
 
 Usage:
-  githubpill [options] "<idea>"            Validate an idea (default)
-  githubpill explore [options] "<space>"   Explore a space for openings
+  githubpill [options] "<idea>"             Validate an idea (default)
+  githubpill --explore [options] "<space>"  Explore a space for openings
 
 Options:
-  --deep                 Clone the top candidates and cite file:LINE evidence (validate only)
+  --deep                 Clone top candidates and cite file:LINE evidence
+  --explore              Explore a space instead of validating an idea
+                         (combine with --deep for cloned evidence)
   --provider <id>        LLM provider: anthropic | openai | gemini | deepseek
   --model <id>           Model id (default depends on provider)
   --sources <csv>        Sources: github,npm,pypi,hackernews
@@ -50,7 +52,8 @@ Other environment:
 Examples:
   githubpill "a CLI that previews diffs as a side-by-side TUI"
   githubpill --deep "a self-hosted RSS reader"
-  githubpill explore "local-first note taking"
+  githubpill --explore "local-first note taking"
+  githubpill --deep --explore "local-first note taking"
 `;
 
 function slugify(text: string): string {
@@ -185,6 +188,7 @@ async function main(): Promise<void> {
     allowPositionals: true,
     options: {
       deep: { type: "boolean", default: false },
+      explore: { type: "boolean", default: false },
       provider: { type: "string" },
       model: { type: "string" },
       sources: { type: "string" },
@@ -203,8 +207,9 @@ async function main(): Promise<void> {
     return;
   }
 
-  const mode = positionals[0] === "explore" ? "explore" : "validate";
-  const subject = (mode === "explore" ? positionals.slice(1) : positionals).join(" ").trim();
+  const usesSubcommand = positionals[0] === "explore";
+  const mode = values.explore || usesSubcommand ? "explore" : "validate";
+  const subject = (usesSubcommand ? positionals.slice(1) : positionals).join(" ").trim();
   if (!subject) {
     process.stderr.write(HELP);
     process.exitCode = 1;
@@ -233,8 +238,14 @@ async function main(): Promise<void> {
   const write = !values["no-write"];
 
   if (mode === "explore") {
-    if (values.deep) log.warn("[githubpill] --deep has no effect in explore mode");
-    const { report, errors, dropped, unverified } = await explore({ topic: subject, llm, config, adapters, onProgress });
+    const { report, errors, dropped, unverified } = await explore({
+      topic: subject,
+      llm,
+      config,
+      adapters,
+      onProgress,
+      ...(values.deep ? { deep: {} } : {}),
+    });
     reportWarnings(log, errors, dropped, unverified);
     const base = `${report.generatedAt.slice(0, 10)}-explore-${slugify(report.sharpened)}`;
     const written = await writeReports(values.out, base, write, flags, {

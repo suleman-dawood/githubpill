@@ -7,7 +7,10 @@ function candidateLine(candidate: ExplorationCandidate): string {
   ]
     .filter(Boolean)
     .join(" · ");
-  return `- [${candidate.name}](${candidate.url})${facts ? ` — ${facts}` : ""}`;
+  const head = `- [${candidate.name}](${candidate.url})${facts ? ` — ${facts}` : ""}`;
+  if (!candidate.evidence || candidate.evidence.length === 0) return head;
+  const cites = candidate.evidence.map((cite) => `  - \`${cite.path}:${cite.line}\` — ${cite.note}`);
+  return [head, ...cites].join("\n");
 }
 
 function linkList(candidates: readonly ExplorationCandidate[]): string {

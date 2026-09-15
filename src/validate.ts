@@ -4,7 +4,7 @@ import type { SourceAdapter } from "./adapters/index.js";
 import type { AdapterError } from "./retrieval/fanout.js";
 import { retrieve } from "./retrieval/retrieve.js";
 import { synthesize } from "./synthesis/synthesize.js";
-import { deriveBand, headlineFor } from "./synthesis/verdict.js";
+import { deriveBand, deriveLabel, axisSum, headlineFor, capWithoutEvidence } from "./synthesis/verdict.js";
 import { inspectCandidates, type DeepOptions } from "./deep/inspect.js";
 import type { LLMClient } from "./synthesis/providers/types.js";
 
@@ -52,14 +52,28 @@ export async function validate(options: ValidateOptions): Promise<ValidateResult
   if (options.deep) {
     progress?.({ type: "stage", stage: "inspect" });
     const deep = await inspectCandidates({
-      candidates,
+      candidates: retrieval.candidates,
       plan: retrieval.plan,
       llm: options.llm,
       config: options.config,
       deep: options.deep,
       onProgress: progress,
     });
-    candidates = deep.candidates;
+    const byId = new Map(deep.inspections.map((inspection) => [inspection.candidateId, inspection]));
+    candidates = candidates.map((candidate) => {
+      const inspection = byId.get(candidate.id);
+      if (!inspection) return candidate;
+      const label = deriveLabel(inspection.axisScores);
+      return {
+        ...candidate,
+        axisScores: inspection.axisScores,
+        axisSum: axisSum(inspection.axisScores),
+        label: inspection.evidence.length > 0 ? label : capWithoutEvidence(label),
+        rationale: inspection.rationale,
+        evidence: inspection.evidence,
+        inspected: true,
+      };
+    });
     clonesAttempted = deep.attempted;
     clonesSucceeded = deep.succeeded;
   }

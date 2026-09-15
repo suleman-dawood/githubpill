@@ -10,10 +10,18 @@ function candidateCard(candidate: ExplorationCandidate): string {
     .map((fact) => `<span class="fact">${escapeHtml(fact)}</span>`)
     .join("");
 
+  const evidence =
+    candidate.evidence && candidate.evidence.length > 0
+      ? `<span class="cites">${candidate.evidence
+          .map((cite) => `<code>${escapeHtml(cite.path)}:${cite.line}</code> ${escapeHtml(cite.note)}`)
+          .join(" · ")}</span>`
+      : "";
+
   return `<a class="card" href="${escapeHtml(candidate.url)}">
     <span class="card-name">${escapeHtml(candidate.name)}</span>
     <span class="card-desc">${escapeHtml(candidate.description)}</span>
     <span class="meta">${facts}</span>
+    ${evidence}
   </a>`;
 }
 
@@ -89,6 +97,8 @@ export function renderExplorationHtml(report: ExplorationReport): string {
   .card-name { display: block; font-weight: 600; color: #f8fafc; }
   .card-desc { display: block; color: #94a3b8; font-size: 13px; margin: 4px 0; }
   .fact { display: inline-block; background: #1e293b; border-radius: 6px; padding: 1px 8px; margin-right: 6px; font-size: 12px; color: #cbd5e1; }
+  .cites { display: block; margin-top: 6px; font-size: 12px; color: #94a3b8; }
+  .cites code { color: #7dd3fc; }
   .muted { color: #94a3b8; font-size: 13px; }
   a { color: #7dd3fc; }
   ul { padding-left: 18px; }
