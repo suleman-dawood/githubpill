@@ -41,3 +41,28 @@ describe("NpmAdapter", () => {
     expect(hits[0]?.url).toBe("https://www.npmjs.com/package/solo");
   });
 });
+
+describe("NpmAdapter.verify", () => {
+  const candidate = {
+    id: "todo-cli",
+    name: "todo-cli",
+    url: "https://www.npmjs.com/package/todo-cli",
+    description: "",
+    sources: ["npm"] as const,
+    matchedQueries: [],
+    score: 1,
+  };
+
+  it("reports a live package", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+    const result = await new NpmAdapter().verify({ ...candidate, sources: ["npm"] }, { limit: 5, config });
+    expect(result.ok).toBe(true);
+  });
+
+  it("reports a missing package", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("gone", { status: 404 }));
+    const result = await new NpmAdapter().verify({ ...candidate, sources: ["npm"] }, { limit: 5, config });
+    expect(result.ok).toBe(false);
+    expect(result.status).toBe(404);
+  });
+});

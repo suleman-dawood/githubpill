@@ -28,3 +28,22 @@ describe("HackerNewsAdapter", () => {
     expect(hits[1]?.url).toBe("https://news.ycombinator.com/item?id=2");
   });
 });
+
+describe("HackerNewsAdapter.verify", () => {
+  it("confirms an item that still resolves", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ id: 1 }));
+    const result = await new HackerNewsAdapter().verify(
+      {
+        id: "1",
+        name: "Show HN",
+        url: "https://example.com",
+        description: "",
+        sources: ["hackernews"],
+        matchedQueries: [],
+        score: 1,
+      },
+      { limit: 5, config },
+    );
+    expect(result.ok).toBe(true);
+  });
+});

@@ -17,18 +17,20 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 | Path | What it is |
 |---|---|
 | `src/adapters/` | Source adapters (GitHub, npm, PyPI, Hacker News) behind one interface |
-| `src/retrieval/` | Query planning, fan-out, dedupe, ranking |
-| `src/synthesis/` | Prompt, Zod schemas, mechanical verdict derivation |
+| `src/retrieval/` | Query planning, fan-out, dedupe, ranking, and the shared `retrieve()` step |
+| `src/synthesis/` | Prompts, Zod schemas, mechanical verdict derivation |
 | `src/synthesis/providers/` | LLM providers behind `LLMClient` (Anthropic, OpenAI, Gemini, DeepSeek) + factory |
+| `src/deep/` | Deep mode: guarded clone, file selection, cite validation, inspection |
 | `src/verify/` | Live citation-integrity gate |
-| `src/report/` | JSON, Markdown, and HTML renderers |
+| `src/report/` | JSON, Markdown, and HTML renderers for both modes |
 | `src/config.ts` | Env -> validated `Config` (provider, keys, sources, limits) |
 | `src/errors.ts` | Typed error hierarchy |
 | `src/logger.ts` | Leveled logger |
-| `src/testing/` | Test doubles (fake adapters/LLM, mock HTTP server) — not shipped |
-| `src/pipeline.ts` | Orchestrates the stages; `src/cli.ts` is the entry point |
+| `src/testing/` | Test doubles (fake adapters/LLM/cloner, mock HTTP server) — not shipped |
+| `src/validate.ts` | Validate mode; `src/explore.ts` is explore mode; `src/cli.ts` is the entry point |
 | `skills/githubpill/` | The Agent Skills wrapper over the CLI |
 | `.claude-plugin/` | Claude Code marketplace manifest |
+| `Formula/` | Homebrew formula |
 | `install.sh` | Installs the skill into every detected agentic CLI |
 | `eval/` | Golden eval cases (harness to come) |
 
@@ -38,13 +40,15 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 npm install
 npm run typecheck     # tsc --noEmit
 npm test              # vitest (offline, no network, no API keys)
+npm run test:coverage # vitest with a coverage report
 npm run build         # emit dist/
 node dist/cli.js "a CLI that previews diffs as a side-by-side TUI"
 ```
 
 Run `npm run typecheck && npm test` before proposing a change. Both must pass.
 Tests never touch the network or an LLM — adapters are exercised with a mocked
-`fetch`, and the LLM client is exercised against a local mock server.
+`fetch`, the LLM client against a local mock server, and deep-mode cloning
+through an injected `Cloner`.
 
 ## Architecture rules
 

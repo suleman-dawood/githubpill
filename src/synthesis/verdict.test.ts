@@ -42,6 +42,8 @@ describe("verdict derivation", () => {
   it("pluralizes headlines", () => {
     expect(headlineFor("yellow", 1)).toContain("1 candidate");
     expect(headlineFor("yellow", 2)).toContain("2 candidates");
+    expect(headlineFor("red", 1)).toContain("1 strong match");
+    expect(headlineFor("red", 2)).toContain("2 strong matches");
     expect(headlineFor("green", 0)).toContain("novel");
   });
 });

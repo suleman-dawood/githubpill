@@ -49,4 +49,20 @@ describe("report renderers", () => {
     expect(html).toContain("side-by-side &lt;diff&gt; viewer");
     expect(html).toContain("verified");
   });
+
+  it("renders deep-mode file evidence in both formats", async () => {
+    const report = await sampleReport();
+    const deep: Report = {
+      ...report,
+      depth: "deep",
+      candidates: report.candidates.map((candidate) => ({
+        ...candidate,
+        inspected: true,
+        evidence: [{ path: "src/main.ts", line: 3, note: "entry point" }],
+      })),
+    };
+
+    expect(renderMarkdown(deep)).toContain("src/main.ts:3");
+    expect(renderHtml(deep)).toContain("src/main.ts:3");
+  });
 });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { withStructuredRetry } from "./structured.js";
+import { z } from "zod";
+import { parseStructuredText, toStrictJsonSchema, withStructuredRetry } from "./structured.js";
 import { ProviderError, StructuredOutputError } from "../../errors.js";
 
 describe("withStructuredRetry", () => {
@@ -34,5 +35,21 @@ describe("withStructuredRetry", () => {
       }),
     ).rejects.toThrow(StructuredOutputError);
     expect(calls).toBe(2);
+  });
+});
+
+describe("toStrictJsonSchema", () => {
+  it("marks nested objects strict", () => {
+    const json = JSON.stringify(
+      toStrictJsonSchema(z.object({ outer: z.object({ inner: z.string() }) })),
+    );
+    expect(json).toContain('"additionalProperties":false');
+    expect(json).toContain('"required":["inner"]');
+  });
+});
+
+describe("parseStructuredText", () => {
+  it("throws a retryable error on malformed JSON", () => {
+    expect(() => parseStructuredText("{not json", "openai")).toThrow(StructuredOutputError);
   });
 });

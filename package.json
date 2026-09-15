@@ -7,7 +7,7 @@
   "author": "Suleman Dawood <sulemandawood123@protonmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/suleman-dawood/githubpill.git"
+    "url": "git+https://github.com/suleman-dawood/githubpill.git"
   },
   "homepage": "https://github.com/suleman-dawood/githubpill",
   "bugs": {
@@ -20,26 +20,34 @@
     "githubpill": "./dist/cli.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
   "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
+    "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^3.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
@@ -50,7 +58,12 @@
     "validation",
     "research",
     "retrieval",
-    "cli"
+    "cli",
+    "llm",
+    "anthropic",
+    "openai",
+    "gemini",
+    "deepseek"
   ],
   "private": false
 }

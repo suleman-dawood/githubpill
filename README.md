@@ -12,6 +12,19 @@ every cited URL live, and returns a verdict:
 🔴  Strong overlap — someone has likely shipped this
 ```
 
+## Modes
+
+| Mode | Question it answers | Command |
+|---|---|---|
+| **Validate** (default) | Does this already exist? | `githubpill "<idea>"` |
+| **Validate, deep** | ...and what does the source actually do? | `githubpill --deep "<idea>"` |
+| **Explore** | What is the shape of this space, and where is the opening? | `githubpill explore "<space>"` |
+
+Validate retrieves prior art, scores overlap, and returns the verdict. Deep
+mode additionally clones the strongest candidates and cites `path:LINE`
+evidence from their source. Explore clusters the retrieved field, states what
+none of the retrieved projects does, and proposes grounded directions.
+
 ## Why
 
 People build things that already exist because validation is usually a vibe.
@@ -52,13 +65,20 @@ flowchart LR
   scores, so identical scores always give identical verdicts.
 - **Verification** (`src/verify/`) re-checks every candidate live and drops the
   ones that fail — the citation-integrity gate.
+- **Deep mode** (`src/deep/`) clones the strongest candidates (shallow, blobless,
+  timeout-guarded), selects and sanitizes their source files, and checks every
+  cited `path:LINE` against the clone. A strong match with no surviving citation
+  is capped, so the verdict never rests on invented evidence.
 - **Reports** (`src/report/`) render JSON, Markdown, and a self-contained HTML
   report with verification badges and axis bars.
 
 ## Install
 
 ```bash
-npm install -g githubpill
+npm install -g githubpill     # npm
+npx githubpill "<idea>"       # no install
+brew tap suleman-dawood/githubpill https://github.com/suleman-dawood/githubpill
+brew install githubpill       # Homebrew
 ```
 
 Requires Node ≥ 20 and one LLM API key. The provider is auto-detected from
@@ -90,9 +110,10 @@ githubpill "a CLI that previews diffs as a side-by-side TUI"
 
 ```bash
 githubpill --json --html "a self-hosted RSS reader"   # extra report formats
+githubpill --deep "a self-hosted RSS reader"          # clone + file:LINE evidence
 githubpill --provider openai "a dotfiles manager"     # pick the LLM provider
 githubpill --sources github,npm "a dotfiles manager"  # restrict sources
-githubpill --out ./recon "an NDIS invoice validator"  # output directory
+githubpill explore "local-first note taking"          # landscape + directions
 ```
 
 The verdict block goes to stdout; progress goes to stderr. Reports land in
@@ -135,13 +156,22 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
 `fetch`, and the LLM client is exercised against a local mock server. See
 [AGENTS.md](./AGENTS.md) for the architecture rules.
 
+## Releasing
+
+Tagging a `v*` commit runs `.github/workflows/release.yml`, which typechecks,
+tests, builds, publishes to npm (needs an `NPM_TOKEN` secret) and creates the
+GitHub release. After publishing, refresh `Formula/githubpill.rb`:
+
+```bash
+curl -sL https://registry.npmjs.org/githubpill/-/githubpill-<version>.tgz | shasum -a 256
+```
+
 ## Roadmap
 
 - **Eval harness** — golden cases in `eval/` (ideas with known competitors) run
   on a schedule to measure recall@k, citation-integrity, and verdict accuracy.
 - **Retrieval depth** — embeddings + pgvector for semantic re-ranking.
 - **More sources** — crates.io, VS Code Marketplace, Product Hunt.
-- **Deep inspection** — clone top candidates and cite `file:LINE` evidence.
 - **Service surface** — a REST API, a job queue with progress, and a report
   viewer over the same engine.
 
@@ -151,6 +181,10 @@ Tests never touch the network or an LLM: adapters are exercised with a mocked
   can be missed.
 - npm and PyPI coverage depends on their public search; PyPI search is parsed
   from the website because no JSON search API exists.
+- Explore reports only what the retrieval surfaced; "no retrieved project does
+  X" is not a claim that nothing does.
+- Deep mode clones GitHub candidates only; npm and PyPI candidates keep their
+  metadata judgement.
 - The verdict is decision support, not a substitute for your own judgment.
 
 ## License
