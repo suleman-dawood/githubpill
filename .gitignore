@@ -21,6 +21,7 @@ Thumbs.db
 node_modules/
 dist/
 *.tsbuildinfo
+*.tgz
 *.log
 
 # Internal planning + agent artifacts — not part of the published plugin
