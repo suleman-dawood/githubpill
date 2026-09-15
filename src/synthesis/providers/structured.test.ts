@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { parseStructuredText, toStrictJsonSchema, withStructuredRetry } from "./structured.js";
+import {
+  parseStructuredText,
+  toStrictJsonSchema,
+  validateStructured,
+  withStructuredRetry,
+} from "./structured.js";
 import { ProviderError, StructuredOutputError } from "../../errors.js";
 
 describe("withStructuredRetry", () => {
@@ -51,5 +56,20 @@ describe("toStrictJsonSchema", () => {
 describe("parseStructuredText", () => {
   it("throws a retryable error on malformed JSON", () => {
     expect(() => parseStructuredText("{not json", "openai")).toThrow(StructuredOutputError);
+  });
+});
+
+describe("validateStructured", () => {
+  it("reports a short, path-labelled mismatch", () => {
+    const schema = z.object({ a: z.string(), b: z.number() });
+    let message = "";
+    try {
+      validateStructured(schema, { a: 1, b: "x" }, "deepseek");
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain("a:");
+    expect(message).toContain("b:");
+    expect(message.length).toBeLessThan(200);
   });
 });

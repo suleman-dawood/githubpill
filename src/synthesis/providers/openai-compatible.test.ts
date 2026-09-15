@@ -64,7 +64,11 @@ describe("OpenAICompatibleClient", () => {
 
     const body = server.requests[0]?.body as ChatBody;
     expect(body.response_format).toEqual({ type: "json_object" });
-    expect(body.messages.find((message) => message.role === "user")?.content).toMatch(/json/i);
+
+    // No enforced schema in this mode, so the prompt must carry the field names.
+    const prompt = body.messages.find((message) => message.role === "user")?.content ?? "";
+    expect(prompt).toMatch(/JSON Schema/i);
+    expect(prompt).toContain('"answer"');
   });
 
   it("reports a refusal as a provider error", async () => {

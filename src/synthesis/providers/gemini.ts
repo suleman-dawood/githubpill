@@ -2,7 +2,12 @@ import { httpPost, parseJson } from "../../adapters/http.js";
 import { ProviderError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
 import { errorMessage } from "./response.js";
-import { parseStructuredText, validateStructured, withStructuredRetry } from "./structured.js";
+import {
+  parseStructuredText,
+  validateStructured,
+  withJsonSchemaInstruction,
+  withStructuredRetry,
+} from "./structured.js";
 import type { LLMClient, ProviderOptions, StructuredRequest } from "./types.js";
 
 const DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -38,7 +43,9 @@ export class GeminiClient implements LLMClient {
       url,
       {
         systemInstruction: { parts: [{ text: request.system }] },
-        contents: [{ role: "user", parts: [{ text: request.prompt }] }],
+        contents: [
+          { role: "user", parts: [{ text: withJsonSchemaInstruction(request.prompt, request.schema) }] },
+        ],
         generationConfig: {
           temperature: 0,
           responseMimeType: "application/json",

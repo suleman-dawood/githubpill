@@ -34,12 +34,27 @@ function makeStrict(node: unknown): unknown {
 export function validateStructured<T>(schema: z.ZodType<T>, raw: unknown, provider: ProviderId): T {
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
-    throw new StructuredOutputError(
-      `response did not match the requested schema: ${parsed.error.message}`,
-      provider,
-    );
+    const detail = parsed.error.issues
+      .slice(0, 4)
+      .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+      .join("; ");
+    throw new StructuredOutputError(`response did not match the schema (${detail})`, provider);
   }
   return parsed.data;
+}
+
+/**
+ * Append the JSON Schema to a prompt. Providers that cannot enforce a schema
+ * (OpenAI-compatible JSON mode, Gemini JSON mime type) need the field names in
+ * the prompt or the model invents its own shape.
+ */
+export function withJsonSchemaInstruction(prompt: string, schema: z.ZodType): string {
+  return [
+    prompt,
+    "",
+    "Respond with a single JSON object that matches this JSON Schema exactly:",
+    JSON.stringify(toJsonSchema(schema), null, 2),
+  ].join("\n");
 }
 
 /** Parse a provider's JSON text, treating malformed output as retryable. */
