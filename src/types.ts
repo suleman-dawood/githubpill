@@ -98,6 +98,15 @@ export interface ReportStats {
   candidatesReported: number;
   citationsChecked: number;
   citationsAlive: number;
+  clonesAttempted?: number;
+  clonesSucceeded?: number;
+}
+
+/** A `path:LINE` citation into a cloned repository, with a short note. */
+export interface EvidenceCite {
+  path: string;
+  line: number;
+  note: string;
 }
 
 /** A candidate joined with its judgement, ready for rendering. */
@@ -116,6 +125,10 @@ export interface ReportCandidate {
   lastActivity?: string;
   archived?: boolean;
   verifiedAt?: string;
+  /** True when the candidate was cloned and inspected (deep mode). */
+  inspected?: boolean;
+  /** File-path evidence from the clone; only present after deep inspection. */
+  evidence?: EvidenceCite[];
 }
 
 export interface Report {
@@ -129,22 +142,51 @@ export interface Report {
   yourAngle: { summary: string; missingFeatures: string[] };
   sourceRuns: SourceRun[];
   stats: ReportStats;
+  depth?: "quick" | "deep";
   generatedAt: string;
 }
 
-export type PipelineStage =
-  | "plan"
-  | "search"
-  | "rank"
-  | "verify"
-  | "synthesize"
-  | "report";
+/** A group of related projects in an exploration. */
+export interface ExplorationCluster {
+  theme: string;
+  summary: string;
+  candidateIds: string[];
+}
+
+/** Something none of the retrieved projects does, with supporting candidates. */
+export interface ExplorationGap {
+  observation: string;
+  candidateIds: string[];
+}
+
+/** A direction worth building, grounded in retrieved candidates. */
+export interface ExplorationDirection {
+  idea: string;
+  why: string;
+  groundedIn: string[];
+}
+
+export interface ExplorationReport {
+  topic: string;
+  sharpened: string;
+  summary: string;
+  clusters: ExplorationCluster[];
+  gaps: ExplorationGap[];
+  directions: ExplorationDirection[];
+  candidates: ReportCandidate[];
+  sourceRuns: SourceRun[];
+  stats: ReportStats;
+  generatedAt: string;
+}
+
+export type PipelineStage = "plan" | "search" | "rank" | "verify" | "synthesize" | "inspect" | "report";
 
 export type ProgressEvent =
   | { type: "stage"; stage: PipelineStage }
   | { type: "search"; source: SourceId; query: string; hits: number }
   | { type: "ranked"; count: number }
   | { type: "verify"; url: string; ok: boolean }
+  | { type: "inspect"; candidateId: string; ok: boolean }
   | { type: "done"; band: VerdictBand };
 
 export type ProgressHandler = (event: ProgressEvent) => void;

@@ -1,6 +1,11 @@
 export type {
   AxisScores,
   Candidate,
+  EvidenceCite,
+  ExplorationCluster,
+  ExplorationDirection,
+  ExplorationGap,
+  ExplorationReport,
   MatchLabel,
   ProgressEvent,
   ProgressHandler,
@@ -46,5 +51,7 @@ export { renderJson } from "./report/json.js";
 export { renderMarkdown } from "./report/markdown.js";
 export { renderHtml } from "./report/html.js";
 
-export { run } from "./pipeline.js";
-export type { RunOptions, RunResult } from "./pipeline.js";
+export { retrieve } from "./retrieval/retrieve.js";
+export type { Retrieval, RetrieveOptions } from "./retrieval/retrieve.js";
+export { validate } from "./validate.js";
+export type { ValidateOptions, ValidateResult } from "./validate.js";

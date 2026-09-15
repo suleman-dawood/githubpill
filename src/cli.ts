@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadConfig, DEFAULT_MODELS } from "./config.js";
 import { createAdapters } from "./adapters/index.js";
 import { createLLMClient } from "./synthesis/providers/index.js";
-import { run } from "./pipeline.js";
+import { validate } from "./validate.js";
 import { renderJson } from "./report/json.js";
 import { renderMarkdown } from "./report/markdown.js";
 import { renderHtml } from "./report/html.js";
@@ -143,7 +143,7 @@ async function main(): Promise<void> {
     }
   };
 
-  const { report, errors, dropped } = await run({ idea: positionals.join(" "), llm, config, adapters, onProgress });
+  const { report, errors, dropped } = await validate({ idea: positionals.join(" "), llm, config, adapters, onProgress });
 
   if (errors.length > 0) {
     log.warn(`[githubpill] ${errors.length} query/queries failed and were skipped:`);

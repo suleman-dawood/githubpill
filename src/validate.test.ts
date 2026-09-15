@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { run } from "./pipeline.js";
+import { validate } from "./validate.js";
 import { FakeAdapter, FakeLLM, hit, testConfig } from "./testing/fakes.js";
 import type { ProgressEvent } from "./types.js";
 
@@ -18,7 +18,7 @@ function llmFor(candidateId: string): FakeLLM {
 describe("run", () => {
   it("runs end to end and derives a red verdict", async () => {
     const adapter = new FakeAdapter({ hits: [hit({ id: "a/b", description: "todo cli", stars: 10 })] });
-    const { report } = await run({
+    const { report } = await validate({
       idea: "a todo cli",
       llm: llmFor("a/b"),
       config: testConfig(),
@@ -35,7 +35,7 @@ describe("run", () => {
 
   it("drops candidates that fail verification and stays green", async () => {
     const adapter = new FakeAdapter({ hits: [hit({ id: "a/b" })], verifyOk: false });
-    const { report, dropped } = await run({
+    const { report, dropped } = await validate({
       idea: "a todo cli",
       llm: llmFor("a/b"),
       config: testConfig(),
@@ -50,7 +50,7 @@ describe("run", () => {
   it("emits progress events across the pipeline", async () => {
     const events: ProgressEvent["type"][] = [];
     const adapter = new FakeAdapter({ hits: [hit({ id: "a/b" })] });
-    await run({
+    await validate({
       idea: "a todo cli",
       llm: llmFor("a/b"),
       config: testConfig(),

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { renderHtml } from "./html.js";
 import { renderJson } from "./json.js";
 import { renderMarkdown } from "./markdown.js";
-import { run } from "../pipeline.js";
+import { validate } from "../validate.js";
 import { FakeAdapter, FakeLLM, hit, testConfig } from "../testing/fakes.js";
 import type { Report } from "../types.js";
 
@@ -23,7 +23,7 @@ async function sampleReport(): Promise<Report> {
       yourAngle: { summary: "angle", missingFeatures: ["faster rendering"] },
     },
   });
-  const { report } = await run({ idea: "a diff viewer", llm, config: testConfig(), adapters: [adapter] });
+  const { report } = await validate({ idea: "a diff viewer", llm, config: testConfig(), adapters: [adapter] });
   return report;
 }
 
