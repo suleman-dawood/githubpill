@@ -1,6 +1,6 @@
 {
   "name": "githubpill",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Prior-art reconnaissance for project ideas: multi-source retrieval, LLM synthesis, verified citations, and a verdict.",
   "type": "module",
   "license": "MIT",
