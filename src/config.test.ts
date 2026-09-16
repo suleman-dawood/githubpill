@@ -52,6 +52,13 @@ describe("loadConfig", () => {
     expect(config.llm.agent).toBe("opencode");
   });
 
+  it("gives the host provider a longer default LLM timeout", () => {
+    const host = loadConfig({ GITHUBPILL_PROVIDER: "host" }, noGh);
+    const openai = loadConfig({ OPENAI_API_KEY: "k" }, noGh);
+    expect(host.llm.timeoutMs).toBeGreaterThan(openai.llm.timeoutMs);
+    expect(loadConfig({ GITHUBPILL_PROVIDER: "host", GITHUBPILL_LLM_TIMEOUT_MS: "5000" }, noGh).llm.timeoutMs).toBe(5000);
+  });
+
   it("generates queries with the LLM by default, unless disabled", () => {
     expect(loadConfig({ OPENAI_API_KEY: "k" }, noGh).llmQueries).toBe(true);
     expect(loadConfig({ OPENAI_API_KEY: "k", GITHUBPILL_LLM_QUERIES: "0" }, noGh).llmQueries).toBe(false);

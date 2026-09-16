@@ -28,7 +28,7 @@ export interface DeepResult {
   succeeded: number;
 }
 
-const SYSTEM = [
+export const DEEP_SYSTEM = [
   "You are a prior-art analyst inspecting a cloned repository.",
   AXIS_GUIDE,
   "Cite the exact file paths and line numbers shown in the file blocks as evidence for your scores.",
@@ -39,6 +39,14 @@ const SYSTEM = [
 
 export function isCloneable(candidate: Candidate): boolean {
   return /^https:\/\/github\.com\/[^/]+\/[^/]+$/.test(candidate.url.replace(/\/$/, ""));
+}
+
+/** The strongest cloneable candidates, in the order they are inspected. */
+export function deepTargets(candidates: readonly Candidate[], limit: number): Candidate[] {
+  return candidates
+    .filter(isCloneable)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
 }
 
 function fileBlock(file: SourceFile, source: string): string {
@@ -78,7 +86,7 @@ async function inspectCandidate(params: {
   try {
     const files = await selectSourceFiles(root, params.maxFiles, params.maxFileLines);
     const output = await params.llm.completeStructured({
-      system: SYSTEM,
+      system: DEEP_SYSTEM,
       prompt: buildDeepPrompt(params.candidate, params.plan, files),
       schema: DeepJudgeSchema,
       schemaName: "deep_judgement",
@@ -115,10 +123,7 @@ export async function inspectCandidates(options: {
   const maxFileLines = deep.maxFileLines ?? config.deepMaxFileLines;
   const timeoutMs = deep.timeoutMs ?? config.cloneTimeoutMs;
 
-  const targets = options.candidates
-    .filter(isCloneable)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  const targets = deepTargets(options.candidates, limit);
 
   const inspections: DeepInspection[] = [];
   let attempted = 0;

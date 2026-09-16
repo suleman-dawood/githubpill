@@ -19,7 +19,7 @@ export interface ExplorationSynthesis {
   candidates: ExplorationCandidate[];
 }
 
-const SYSTEM = [
+export const EXPLORATION_SYSTEM = [
   "You are a landscape analyst for software project ideas.",
   "Given a topic and a set of retrieved projects, describe the shape of the space.",
   "Group the projects into clusters by approach or segment.",
@@ -101,7 +101,7 @@ export async function synthesizeExploration(
   }
 
   const output = await llm.completeStructured({
-    system: SYSTEM,
+    system: EXPLORATION_SYSTEM,
     prompt: buildExplorationPrompt(topic, plan, candidates, evidence),
     schema: ExplorationSchema,
     schemaName: "exploration",

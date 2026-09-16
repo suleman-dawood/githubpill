@@ -2,8 +2,7 @@
 
 [![tests](https://github.com/suleman-dawood/githubpill/actions/workflows/tests.yml/badge.svg)](https://github.com/suleman-dawood/githubpill/actions/workflows/tests.yml)
 
-Prior-art reconnaissance for project ideas. Describe an idea; GithubPill
-searches several sources, synthesizes what it finds with an LLM, verifies
+Describe an idea and GithubPill searches several sources, synthesizes what it finds with an LLM, verifies
 every cited URL live, and returns a verdict:
 
 ```
@@ -65,6 +64,10 @@ flowchart LR
   DeepSeek), built by a factory from validated config. The LLM never emits a
   verdict label: labels and the overall band are derived mechanically from the
   scores, so identical scores always give identical verdicts.
+- **Agent-driven sessions** (`src/session.ts`) split the pipeline for agents:
+  `prepare` runs every deterministic stage and emits the prompts and JSON
+  Schemas, the calling agent fills them in, and `finish` folds the responses
+  back through the same verdict and citation gates. No second agent is spawned.
 - **Verification** (`src/verify/`) re-checks every candidate live and drops the
   ones that fail — the citation-integrity gate.
 - **Deep mode** (`src/deep/`) clones the strongest candidates (shallow, blobless,
@@ -95,8 +98,11 @@ whichever key is present, or set explicitly with `--provider` /
 
 If no API key is set, GithubPill falls back to the **`host`** provider and
 drives the agentic CLI already on your machine (`claude`, `opencode`, `codex`,
-or `pi`) to do the reasoning, so it works with **no API key**. Set
-`GITHUBPILL_AGENT` to choose one explicitly.
+or `pi`) to do the reasoning, so single-shot commands work with **no API key**.
+Set `GITHUBPILL_AGENT` to choose one explicitly, or `GITHUBPILL_LLM_TIMEOUT_MS`
+to raise the per-call timeout (the host default is 120s). When the agent is the
+one invoking GithubPill, prefer the agent-driven workflow below — it reasons in
+the agent's own session instead of starting a second one.
 
 ```bash
 export ANTHROPIC_API_KEY=...        # or OPENAI_API_KEY / GEMINI_API_KEY / DEEPSEEK_API_KEY
@@ -138,16 +144,34 @@ Report: githubpill-reports/2026-05-27-a-cli-that-previews-diffs-as-a-side-by-s.m
 
 ## Use from an agent
 
-The skill in `skills/githubpill/` is a thin wrapper that runs the CLI, so it
-works in any host that supports the Agent Skills standard — Claude Code,
-opencode, Codex CLI, Cursor, pi, and others. `install.sh` detects the CLIs on
-your machine and installs the skill into each:
+The skill in `skills/githubpill/` drives the CLI, so it works in any host that
+supports the Agent Skills standard — Claude Code, opencode, Codex CLI, Cursor,
+pi, and others. `install.sh` detects the CLIs on your machine and installs the
+skill into each:
 
 ```bash
 bash install.sh            # every detected CLI, user scope
 bash install.sh --project  # this repo's agent configs
 bash install.sh --list     # show targets, install nothing
 ```
+
+When the calling agent is already an LLM, there is no reason to start a second
+one. The **agent-driven workflow** splits the pipeline: the CLI does the
+deterministic work and emits prompts, the agent writes the responses, and the
+CLI assembles the report. No API key, no nested agent:
+
+```bash
+githubpill plan "<idea>" > plan.json                                  # scaffold a plan
+# edit plan.json, then:
+githubpill prepare "<idea>" --plan plan.json --work .gp               # retrieve + emit requests
+# answer each .gp/requests/*.json by writing .gp/responses/*.json
+githubpill finish --work .gp                                          # verdict + report
+```
+
+`prepare` and `finish` accept the same `--deep` / `--explore` flags as the
+single-shot commands, so deep mode works too: `prepare --deep` clones the top
+candidates, and `finish` re-checks every `path:LINE` cite against the clone
+before it reaches the report.
 
 ## Development
 
