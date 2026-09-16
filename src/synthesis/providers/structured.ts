@@ -98,6 +98,6 @@ export function withStructuredRetry<T>(attempt: () => Promise<T>): Promise<T> {
   return pRetry(attempt, {
     retries: 1,
     minTimeout: 0,
-    shouldRetry: ({ error }) => error instanceof StructuredOutputError,
+    shouldRetry: (error) => error instanceof StructuredOutputError,
   });
 }

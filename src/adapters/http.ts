@@ -88,10 +88,10 @@ async function request(url: string, spec: RequestSpec, options: HttpOptions): Pr
       minTimeout: 0,
       factor: 1,
       shouldRetry: () => true,
-      onFailedAttempt: async ({ error, attemptNumber, retriesLeft }) => {
-        if (retriesLeft <= 0) return;
+      onFailedAttempt: async (error) => {
+        if (error.retriesLeft <= 0) return;
         const after = error instanceof RetryableResponse ? retryAfterMs(error.response.headers) : undefined;
-        await sleep(after ?? baseBackoffMs(attemptNumber - 1));
+        await sleep(after ?? baseBackoffMs(error.attemptNumber - 1));
       },
     });
   } catch (error) {
