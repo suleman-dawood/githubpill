@@ -1,7 +1,7 @@
 import { generateObject, NoObjectGeneratedError, type LanguageModel } from "ai";
 import { ProviderError, StructuredOutputError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
-import { withStructuredRetry } from "./structured.js";
+import { withJsonSchemaInstruction, withStructuredRetry } from "./structured.js";
 import type { LLMClient, StructuredRequest } from "./types.js";
 
 export interface AiSdkClientOptions {
@@ -10,6 +10,12 @@ export interface AiSdkClientOptions {
   languageModel: LanguageModel;
   maxTokens: number;
   timeoutMs: number;
+  /**
+   * Append the JSON Schema to the prompt. Needed when the provider enforces
+   * only JSON syntax (DeepSeek's `json_object`) rather than a schema, so the
+   * model still knows the field names.
+   */
+  schemaInPrompt?: boolean;
 }
 
 /**
@@ -24,6 +30,7 @@ export class AiSdkClient implements LLMClient {
   private readonly languageModel: LanguageModel;
   private readonly maxTokens: number;
   private readonly timeoutMs: number;
+  private readonly schemaInPrompt: boolean;
 
   constructor(options: AiSdkClientOptions) {
     this.provider = options.provider;
@@ -31,6 +38,7 @@ export class AiSdkClient implements LLMClient {
     this.languageModel = options.languageModel;
     this.maxTokens = options.maxTokens;
     this.timeoutMs = options.timeoutMs;
+    this.schemaInPrompt = options.schemaInPrompt ?? false;
   }
 
   completeStructured<T>(request: StructuredRequest<T>): Promise<T> {
@@ -41,7 +49,9 @@ export class AiSdkClient implements LLMClient {
           schema: request.schema,
           schemaName: request.schemaName,
           system: request.system,
-          prompt: request.prompt,
+          prompt: this.schemaInPrompt
+            ? withJsonSchemaInstruction(request.prompt, request.schema)
+            : request.prompt,
           temperature: 0,
           maxOutputTokens: request.maxTokens ?? this.maxTokens,
           maxRetries: 0,

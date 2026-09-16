@@ -56,6 +56,8 @@ export function createLLMClient(config: LlmConfig): LLMClient {
     languageModel: languageModelFor(config),
     maxTokens: config.maxTokens,
     timeoutMs: config.timeoutMs,
+    // DeepSeek enforces JSON syntax but not a schema, so the prompt must carry it.
+    ...(config.provider === "deepseek" ? { schemaInPrompt: true } : {}),
   });
 }
 

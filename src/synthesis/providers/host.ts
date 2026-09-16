@@ -62,7 +62,13 @@ export function resolveHost(agent?: string): HostCommand {
 
 export const execHost: HostRunner = async (command, args, timeoutMs) => {
   try {
-    const { stdout } = await execa(command, [...args], { timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 });
+    const { stdout } = await execa(command, [...args], {
+      timeout: timeoutMs,
+      maxBuffer: 20 * 1024 * 1024,
+      // Agentic CLIs read stdin when it is a pipe; close it so they run the
+      // prompt argument instead of waiting for input that never arrives.
+      stdin: "ignore",
+    });
     return stdout;
   } catch (error) {
     const stderr = (error as { stderr?: string }).stderr ?? "";
