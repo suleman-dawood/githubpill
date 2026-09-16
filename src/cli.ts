@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, DEFAULT_MODELS } from "./config.js";
 import { createAdapters } from "./adapters/index.js";
 import { createLLMClient } from "./synthesis/providers/index.js";
+import { planQueries } from "./retrieval/query-plan.js";
 import { validate } from "./validate.js";
 import { explore } from "./explore.js";
+import { prepare, finish, writeSession, readSession, readResponses } from "./session.js";
 import { renderJson } from "./report/json.js";
 import { renderMarkdown } from "./report/markdown.js";
 import { renderHtml } from "./report/html.js";
@@ -14,7 +16,13 @@ import { renderExplorationMarkdown } from "./report/explore-markdown.js";
 import { renderExplorationHtml } from "./report/explore-html.js";
 import { createLogger, type Logger } from "./logger.js";
 import { ConfigError, GithubPillError } from "./errors.js";
-import type { ExplorationReport, ProgressEvent, Report } from "./types.js";
+import type {
+  ExplorationReport,
+  ProgressEvent,
+  QueryPlan,
+  Report,
+} from "./types.js";
+import type { SessionState } from "./session.js";
 
 const HELP = `githubpill — prior-art reconnaissance for project ideas
 
@@ -22,10 +30,17 @@ Usage:
   githubpill [options] "<idea>"             Validate an idea (default)
   githubpill --explore [options] "<space>"  Explore a space for openings
 
+Agent-driven workflow (no LLM key, no nested agent — the calling agent reasons):
+  githubpill plan "<idea>"                  Print a heuristic query plan to edit
+  githubpill prepare "<idea>" [options]     Retrieve + emit the reasoning requests
+  githubpill finish [--work <dir>]          Assemble the report from responses/
+
 Options:
   --deep                 Clone top candidates and cite file:LINE evidence
   --explore              Explore a space instead of validating an idea
                          (combine with --deep for cloned evidence)
+  --work <dir>           Session directory (default: githubpill-session)
+  --plan <file>          Query plan JSON for prepare (skips the heuristic planner)
   --provider <id>        LLM provider: anthropic | openai | gemini | deepseek
   --model <id>           Model id (default depends on provider)
   --sources <csv>        Sources: github,npm,pypi,hackernews
@@ -44,11 +59,16 @@ Providers and API keys (first key found selects the provider):
   deepseek    DEEPSEEK_API_KEY                   default model ${DEFAULT_MODELS.deepseek}
   host        (no key) uses an installed agentic CLI: claude, opencode, codex, pi
 
+The agent-driven workflow never spawns an agent: prepare writes every prompt and
+JSON Schema under <work>/requests/, the calling agent writes matching JSON to
+<work>/responses/, and finish derives the verdict and renders the report.
+
 Other environment:
   GITHUB_TOKEN / GH_TOKEN   Optional; raises GitHub rate limits (falls back to \`gh auth token\`)
   GITHUBPILL_PROVIDER       Force a provider instead of auto-detecting
   GITHUBPILL_MODEL          Override the model id
   GITHUBPILL_AGENT          Agentic CLI for the host provider (claude|opencode|codex|pi)
+  GITHUBPILL_LLM_TIMEOUT_MS Per-call LLM timeout in ms (host defaults to 120000)
   GITHUBPILL_LLM_QUERIES    Set to 0 to use the heuristic query planner
   GITHUBPILL_LOG            silent | error | warn | info | debug
 
@@ -56,7 +76,9 @@ Examples:
   githubpill "a CLI that previews diffs as a side-by-side TUI"
   githubpill --deep "a self-hosted RSS reader"
   githubpill --explore "local-first note taking"
-  githubpill --deep --explore "local-first note taking"
+  githubpill plan "offline invoicing for contractors" > plan.json
+  githubpill prepare "offline invoicing for contractors" --plan plan.json --work /tmp/gp
+  githubpill finish --work /tmp/gp
 `;
 
 function slugify(text: string): string {
@@ -154,6 +176,29 @@ function explorationBlock(report: ExplorationReport, written: string[]): string 
   return `${lines.join("\n")}\n`;
 }
 
+function prepareBlock(state: SessionState, work: string): string {
+  const lines = [
+    `Prepared ${state.mode} retrieval — ${state.retrieval.candidates.length} verified candidate(s).`,
+    `Work dir: ${work}`,
+  ];
+
+  for (const candidate of state.retrieval.candidates.slice(0, 8)) {
+    lines.push(`- ${candidate.name} (${candidate.id}) ${candidate.url}`);
+  }
+
+  if (state.requests.length === 0) {
+    lines.push("", "No reasoning needed (no candidates). Run:", `  githubpill finish --work ${work}`);
+    return `${lines.join("\n")}\n`;
+  }
+
+  lines.push("", "Answer each request by writing JSON to the matching responses/ file:");
+  for (const request of state.requests) {
+    lines.push(`- ${request.key}: requests/${request.file} -> responses/${request.file}`);
+  }
+  lines.push("", `Then run: githubpill finish --work ${work}`);
+  return `${lines.join("\n")}\n`;
+}
+
 function progressHandler(log: Logger): (event: ProgressEvent) => void {
   return (event) => {
     switch (event.type) {
@@ -186,6 +231,93 @@ function progressHandler(log: Logger): (event: ProgressEvent) => void {
   };
 }
 
+type Values = Record<string, string | boolean | undefined>;
+
+/** Route CLI overrides through the same validated config path as env vars. */
+function configEnv(values: Values): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (values.provider) env.GITHUBPILL_PROVIDER = values.provider as string;
+  if (values.model) env.GITHUBPILL_MODEL = values.model as string;
+  if (values.sources) env.GITHUBPILL_SOURCES = values.sources as string;
+  if (values["max-candidates"]) env.GITHUBPILL_MAX_CANDIDATES = values["max-candidates"] as string;
+  if (values.quiet) env.GITHUBPILL_LOG = "silent";
+  return env;
+}
+
+function runPlan(idea: string): void {
+  if (!idea) {
+    process.stderr.write(HELP);
+    process.exitCode = 1;
+    return;
+  }
+  process.stdout.write(renderJson(planQueries(idea)));
+}
+
+async function runPrepare(values: Values, idea: string): Promise<void> {
+  if (!idea) {
+    process.stderr.write(HELP);
+    process.exitCode = 1;
+    return;
+  }
+
+  const config = loadConfig(configEnv(values));
+  const log = createLogger(config.logLevel);
+  const work = (values.work as string | undefined) ?? "githubpill-session";
+  const plan = values.plan
+    ? (JSON.parse(await readFile(values.plan as string, "utf8")) as QueryPlan)
+    : undefined;
+
+  log.info(`[githubpill] prepare mode=${values.explore ? "explore" : "validate"} sources=${config.sources.join(",")}`);
+
+  const state = await prepare({
+    idea,
+    config,
+    adapters: createAdapters(config.sources),
+    mode: values.explore ? "explore" : "validate",
+    ...(values.deep ? { deep: {} } : {}),
+    ...(plan ? { plan } : {}),
+    onProgress: progressHandler(log),
+  });
+
+  await writeSession(work, state);
+  process.stdout.write(prepareBlock(state, work));
+}
+
+async function runFinish(values: Values): Promise<void> {
+  const work = (values.work as string | undefined) ?? "githubpill-session";
+  const state = await readSession(work);
+  const responses = await readResponses(work, state);
+  const { report, errors, dropped, unverified } = await finish({ state, responses });
+
+  const log = createLogger(values.quiet ? "silent" : "info");
+  reportWarnings(log, errors, dropped, unverified);
+
+  const flags = { json: values.json as boolean, html: values.html as boolean };
+  const write = !values["no-write"];
+  const out = (values.out as string | undefined) ?? "githubpill-reports";
+
+  if (state.mode === "explore") {
+    const exploration = report as ExplorationReport;
+    const base = `${exploration.generatedAt.slice(0, 10)}-explore-${slugify(exploration.sharpened)}`;
+    const written = await writeReports(out, base, write, flags, {
+      markdown: renderExplorationMarkdown(exploration),
+      json: exploration,
+      html: renderExplorationHtml(exploration),
+    });
+    process.stdout.write(explorationBlock(exploration, written));
+    return;
+  }
+
+  const validation = report as Report;
+  const base = `${validation.generatedAt.slice(0, 10)}-${slugify(validation.sharpened)}`;
+  const written = await writeReports(out, base, write, flags, {
+    markdown: renderMarkdown(validation),
+    json: validation,
+    html: renderHtml(validation),
+  });
+  process.stdout.write(validationBlock(validation, written));
+}
+
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -196,6 +328,8 @@ async function main(): Promise<void> {
       model: { type: "string" },
       sources: { type: "string" },
       "max-candidates": { type: "string" },
+      work: { type: "string" },
+      plan: { type: "string" },
       out: { type: "string", default: "githubpill-reports" },
       json: { type: "boolean", default: false },
       html: { type: "boolean", default: false },
@@ -210,7 +344,21 @@ async function main(): Promise<void> {
     return;
   }
 
-  const usesSubcommand = positionals[0] === "explore";
+  const subcommand = positionals[0];
+  if (subcommand === "plan") {
+    runPlan(positionals.slice(1).join(" ").trim());
+    return;
+  }
+  if (subcommand === "prepare") {
+    await runPrepare(values, positionals.slice(1).join(" ").trim());
+    return;
+  }
+  if (subcommand === "finish") {
+    await runFinish(values);
+    return;
+  }
+
+  const usesSubcommand = subcommand === "explore";
   const mode = values.explore || usesSubcommand ? "explore" : "validate";
   const subject = (usesSubcommand ? positionals.slice(1) : positionals).join(" ").trim();
   if (!subject) {
@@ -219,15 +367,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Route CLI overrides through the same validated config path as env vars.
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  if (values.provider) env.GITHUBPILL_PROVIDER = values.provider;
-  if (values.model) env.GITHUBPILL_MODEL = values.model;
-  if (values.sources) env.GITHUBPILL_SOURCES = values.sources;
-  if (values["max-candidates"]) env.GITHUBPILL_MAX_CANDIDATES = values["max-candidates"];
-  if (values.quiet) env.GITHUBPILL_LOG = "silent";
-
-  const config = loadConfig(env);
+  const config = loadConfig(configEnv(values));
   const log = createLogger(config.logLevel);
   const llm = createLLMClient(config.llm);
   const adapters = createAdapters(config.sources);

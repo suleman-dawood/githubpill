@@ -57,7 +57,23 @@ export { renderExplorationHtml } from "./report/explore-html.js";
 
 export { retrieve } from "./retrieval/retrieve.js";
 export type { Retrieval, RetrieveOptions } from "./retrieval/retrieve.js";
-export { validate } from "./validate.js";
+export { validate, buildValidationReport } from "./validate.js";
 export type { ValidateOptions, ValidateResult } from "./validate.js";
-export { explore } from "./explore.js";
+export { explore, buildExplorationReport } from "./explore.js";
 export type { ExploreOptions, ExploreResult } from "./explore.js";
+export {
+  prepare,
+  finish,
+  writeSession,
+  readSession,
+  readResponses,
+  cleanupSession,
+} from "./session.js";
+export type {
+  FinishOptions,
+  FinishResult,
+  PrepareOptions,
+  SessionMode,
+  SessionRequest,
+  SessionState,
+} from "./session.js";

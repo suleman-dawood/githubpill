@@ -12,6 +12,8 @@ export interface RetrieveOptions {
   config: Config;
   /** When present (and enabled in config), queries are LLM-generated. */
   llm?: LLMClient;
+  /** A precomputed plan; skips planning entirely. Wins over `llm`. */
+  plan?: QueryPlan;
   /** Defaults to the adapters for `config.sources`. Inject for tests. */
   adapters?: SourceAdapter[];
   onProgress?: ProgressHandler;
@@ -39,9 +41,10 @@ export async function retrieve(options: RetrieveOptions): Promise<Retrieval> {
 
   progress?.({ type: "stage", stage: "plan" });
   const plan =
-    options.llm && config.llmQueries
+    options.plan ??
+    (options.llm && config.llmQueries
       ? await planQueriesWithLlm(options.idea, options.llm)
-      : planQueries(options.idea);
+      : planQueries(options.idea));
 
   progress?.({ type: "stage", stage: "search" });
   const { hits, runs, errors } = await fanout(adapters, plan, config, progress, options.signal);

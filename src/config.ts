@@ -95,6 +95,15 @@ function resolveProvider(env: NodeJS.ProcessEnv): ProviderId {
   return detected ?? "host";
 }
 
+/** Agentic CLIs cold-start slowly, so the host provider needs a longer leash. */
+const HOST_LLM_TIMEOUT_MS = 120_000;
+
+function resolveLlmTimeout(env: NodeJS.ProcessEnv, provider: ProviderId, fallbackMs: number): number {
+  const parsed = PositiveInt.safeParse(env.GITHUBPILL_LLM_TIMEOUT_MS);
+  if (parsed.success) return parsed.data;
+  return provider === "host" ? HOST_LLM_TIMEOUT_MS : fallbackMs;
+}
+
 function resolveSources(env: NodeJS.ProcessEnv): SourceId[] {
   const raw = env.GITHUBPILL_SOURCES?.trim();
   if (!raw) return [...SOURCE_IDS];
@@ -112,8 +121,7 @@ function resolveSources(env: NodeJS.ProcessEnv): SourceId[] {
   return [...new Set(requested)] as SourceId[];
 }
 
-/** Read the token from an authenticated `gh` session, if one is available. */
-function ghCliToken(): string | undefined {
+/** Read the token from an authenticated `gh` session, if one is available. */function ghCliToken(): string | undefined {
   try {
     const token = execFileSync("gh", ["auth", "token"], {
       encoding: "utf8",
@@ -165,7 +173,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
       apiKey,
       model: env.GITHUBPILL_MODEL || DEFAULT_MODELS[provider],
       maxTokens: limits.maxTokens,
-      timeoutMs: limits.requestTimeoutMs,
+      timeoutMs: resolveLlmTimeout(env, provider, limits.requestTimeoutMs),
       ...(env[BASE_URL_ENV[provider]] ? { baseUrl: env[BASE_URL_ENV[provider]] as string } : {}),
       ...(env.GITHUBPILL_AGENT ? { agent: env.GITHUBPILL_AGENT } : {}),
     },

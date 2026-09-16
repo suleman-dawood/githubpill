@@ -10,7 +10,7 @@ export interface SynthesisResult {
   yourAngle: { summary: string; missingFeatures: string[] };
 }
 
-const SYSTEM = [
+export const SYNTHESIS_SYSTEM = [
   "You are a prior-art analyst for software project ideas.",
   "Given an idea and a set of retrieved candidate projects, judge how closely each candidate overlaps.",
   AXIS_GUIDE,
@@ -97,7 +97,7 @@ export async function synthesize(
   }
 
   const output = await llm.completeStructured({
-    system: SYSTEM,
+    system: SYNTHESIS_SYSTEM,
     prompt: buildPrompt(idea, plan, candidates),
     schema: SynthesisSchema,
     schemaName: "prior_art_analysis",

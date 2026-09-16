@@ -1,15 +1,6 @@
 githubpill-reports/
 /tmp/githubpill/
 
-# Editor + OS junk
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-.idea/
-.vscode/
-
 # Secrets — never commit
 .env
 .env.*
@@ -23,8 +14,3 @@ dist/
 *.tsbuildinfo
 *.tgz
 *.log
-
-# Internal planning + agent artifacts — not part of the published plugin
-.claude/
-.planning/
-CLAUDE.md
