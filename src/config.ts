@@ -29,6 +29,9 @@ const BASE_URL_ENV: Record<ProviderId, string> = {
   host: "",
 };
 
+/** Agentic CLIs cold-start slowly, so the host provider needs a longer leash. */
+const HOST_LLM_TIMEOUT_MS = 120_000;
+
 export interface LlmConfig {
   provider: ProviderId;
   apiKey: string;
@@ -60,6 +63,11 @@ export interface Config {
   logLevel: LogLevel;
 }
 
+export interface ConfigDeps {
+  /** Injectable for tests so they never shell out to `gh`. */
+  ghToken?: () => string | undefined;
+}
+
 const PositiveInt = z.coerce.number().int().positive();
 
 const LimitsSchema = z.object({
@@ -74,6 +82,8 @@ const LimitsSchema = z.object({
   deepMaxFiles: PositiveInt.max(50),
   deepMaxFileLines: PositiveInt.max(2000),
 });
+
+type Limits = z.infer<typeof LimitsSchema>;
 
 function apiKeyFor(env: NodeJS.ProcessEnv, provider: ProviderId): string | undefined {
   return API_KEY_ENV[provider].map((name) => env[name]).find(Boolean);
@@ -95,13 +105,29 @@ function resolveProvider(env: NodeJS.ProcessEnv): ProviderId {
   return detected ?? "host";
 }
 
-/** Agentic CLIs cold-start slowly, so the host provider needs a longer leash. */
-const HOST_LLM_TIMEOUT_MS = 120_000;
-
 function resolveLlmTimeout(env: NodeJS.ProcessEnv, provider: ProviderId, fallbackMs: number): number {
   const parsed = PositiveInt.safeParse(env.GITHUBPILL_LLM_TIMEOUT_MS);
   if (parsed.success) return parsed.data;
   return provider === "host" ? HOST_LLM_TIMEOUT_MS : fallbackMs;
+}
+
+function resolveLlm(
+  env: NodeJS.ProcessEnv,
+  provider: ProviderId,
+  apiKey: string,
+  limits: Limits,
+): LlmConfig {
+  const baseUrl = env[BASE_URL_ENV[provider]];
+
+  return {
+    provider,
+    apiKey,
+    model: env.GITHUBPILL_MODEL || DEFAULT_MODELS[provider],
+    maxTokens: limits.maxTokens,
+    timeoutMs: resolveLlmTimeout(env, provider, limits.requestTimeoutMs),
+    ...(baseUrl ? { baseUrl } : {}),
+    ...(env.GITHUBPILL_AGENT ? { agent: env.GITHUBPILL_AGENT } : {}),
+  };
 }
 
 function resolveSources(env: NodeJS.ProcessEnv): SourceId[] {
@@ -121,35 +147,9 @@ function resolveSources(env: NodeJS.ProcessEnv): SourceId[] {
   return [...new Set(requested)] as SourceId[];
 }
 
-/** Read the token from an authenticated `gh` session, if one is available. */function ghCliToken(): string | undefined {
+function resolveLimits(env: NodeJS.ProcessEnv): Limits {
   try {
-    const token = execFileSync("gh", ["auth", "token"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return token || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export interface ConfigDeps {
-  /** Injectable for tests so they never shell out to `gh`. */
-  ghToken?: () => string | undefined;
-}
-
-export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDeps = {}): Config {
-  const provider = resolveProvider(env);
-  const apiKey = apiKeyFor(env, provider) ?? "";
-  if (provider !== "host" && !apiKey) {
-    throw new ConfigError(
-      `Provider "${provider}" is selected but no API key is set. Set ${API_KEY_ENV[provider].join(" or ")}.`,
-    );
-  }
-
-  let limits: z.infer<typeof LimitsSchema>;
-  try {
-    limits = LimitsSchema.parse({
+    return LimitsSchema.parse({
       perSourceLimit: env.GITHUBPILL_PER_SOURCE_LIMIT ?? 10,
       maxCandidates: env.GITHUBPILL_MAX_CANDIDATES ?? 8,
       concurrency: env.GITHUBPILL_CONCURRENCY ?? 4,
@@ -164,19 +164,43 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
   } catch (error) {
     throw new ConfigError(`Invalid configuration: ${(error as Error).message}`);
   }
+}
 
-  const logLevel: LogLevel = isLogLevel(env.GITHUBPILL_LOG ?? "") ? (env.GITHUBPILL_LOG as LogLevel) : "info";
+function resolveLogLevel(env: NodeJS.ProcessEnv): LogLevel {
+  const level = env.GITHUBPILL_LOG ?? "";
+  return isLogLevel(level) ? level : "info";
+}
+
+/** Read the token from an authenticated `gh` session, if one is available. */
+function ghCliToken(): string | undefined {
+  try {
+    const token = execFileSync("gh", ["auth", "token"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    return token || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveGithubToken(env: NodeJS.ProcessEnv, deps: ConfigDeps): string | undefined {
+  return env.GITHUB_TOKEN || env.GH_TOKEN || (deps.ghToken ?? ghCliToken)();
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDeps = {}): Config {
+  const provider = resolveProvider(env);
+  const apiKey = apiKeyFor(env, provider) ?? "";
+  if (provider !== "host" && !apiKey) {
+    throw new ConfigError(
+      `Provider "${provider}" is selected but no API key is set. Set ${API_KEY_ENV[provider].join(" or ")}.`,
+    );
+  }
+
+  const limits = resolveLimits(env);
 
   const config: Config = {
-    llm: {
-      provider,
-      apiKey,
-      model: env.GITHUBPILL_MODEL || DEFAULT_MODELS[provider],
-      maxTokens: limits.maxTokens,
-      timeoutMs: resolveLlmTimeout(env, provider, limits.requestTimeoutMs),
-      ...(env[BASE_URL_ENV[provider]] ? { baseUrl: env[BASE_URL_ENV[provider]] as string } : {}),
-      ...(env.GITHUBPILL_AGENT ? { agent: env.GITHUBPILL_AGENT } : {}),
-    },
+    llm: resolveLlm(env, provider, apiKey, limits),
     sources: resolveSources(env),
     perSourceLimit: limits.perSourceLimit,
     maxCandidates: limits.maxCandidates,
@@ -188,10 +212,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, deps: ConfigDep
     cloneTimeoutMs: limits.cloneTimeoutMs,
     deepMaxFiles: limits.deepMaxFiles,
     deepMaxFileLines: limits.deepMaxFileLines,
-    logLevel,
+    logLevel: resolveLogLevel(env),
   };
 
-  const githubToken = env.GITHUB_TOKEN || env.GH_TOKEN || (deps.ghToken ?? ghCliToken)();
+  const githubToken = resolveGithubToken(env, deps);
   if (githubToken) config.githubToken = githubToken;
 
   return config;

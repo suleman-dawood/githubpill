@@ -1,9 +1,11 @@
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
+import { verification, verificationFromError, type SearchOptions, type SourceAdapter } from "./types.js";
 import { httpGet } from "./http.js";
-import { HttpError } from "../errors.js";
 
 const API = "https://pypi.org";
+
+const SNIPPET_RE =
+  /<a[^>]*class="[^"]*package-snippet[^"]*"[^>]*href="\/project\/([^/"]+)\/"[^>]*>([\s\S]*?)<\/a>/g;
 
 /**
  * PyPI has no JSON search API, so this adapter reads the public search page.
@@ -12,11 +14,9 @@ const API = "https://pypi.org";
  */
 export function parseSnippets(html: string): Array<{ name: string; description: string }> {
   const results: Array<{ name: string; description: string }> = [];
-  const blocks = html.matchAll(/<a[^>]*class="[^"]*package-snippet[^"]*"[^>]*href="\/project\/([^/"]+)\/"[^>]*>([\s\S]*?)<\/a>/g);
-  for (const block of blocks) {
-    const fallbackName = block[1] ?? "";
-    const inner = block[2] ?? "";
-    const name = inner.match(/package-snippet__name[^>]*>([^<]+)</)?.[1]?.trim() ?? fallbackName;
+  for (const match of html.matchAll(SNIPPET_RE)) {
+    const [, hrefName = "", inner = ""] = match;
+    const name = inner.match(/package-snippet__name[^>]*>([^<]+)</)?.[1]?.trim() ?? hrefName;
     const description = inner.match(/package-snippet__description[^>]*>([^<]*)</)?.[1]?.trim() ?? "";
     if (name) results.push({ name, description });
   }
@@ -57,10 +57,7 @@ export class PyPiAdapter implements SourceAdapter {
       });
       return verification(response.ok, response.status, response.finalUrl);
     } catch (error) {
-      if (error instanceof HttpError) {
-        return verification(false, error.status, undefined, error.message);
-      }
-      return verification(false, null, undefined, (error as Error).message);
+      return verificationFromError(error);
     }
   }
 }

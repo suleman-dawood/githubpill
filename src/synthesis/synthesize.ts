@@ -1,7 +1,7 @@
-import type { Candidate, QueryPlan, ReportCandidate } from "../types.js";
+import type { AxisScores, Candidate, QueryPlan, ReportCandidate } from "../types.js";
 import type { LLMClient } from "./providers/types.js";
 import { describeCandidate } from "./describe.js";
-import { AXIS_GUIDE, SynthesisSchema, type SynthesisOutput } from "./schema.js";
+import { AXIS_GUIDE, SynthesisSchema, type CandidateJudgementOutput, type SynthesisOutput } from "./schema.js";
 import { axisSum, deriveLabel } from "./verdict.js";
 
 export interface SynthesisResult {
@@ -37,40 +37,41 @@ export function buildPrompt(idea: string, plan: QueryPlan, candidates: readonly 
     .join("\n");
 }
 
+function zeroAxes(): AxisScores {
+  return { coreFunction: 0, targetAudience: 0, scope: 0, approach: 0, activity: 0 };
+}
+
+/** Join a retrieved candidate with the model's judgement (or a zero default). */
+function toReportCandidate(
+  candidate: Candidate,
+  entry: CandidateJudgementOutput | undefined,
+): ReportCandidate {
+  const axisScores = entry?.axisScores ?? zeroAxes();
+  const result: ReportCandidate = {
+    id: candidate.id,
+    name: candidate.name,
+    url: candidate.url,
+    description: candidate.description,
+    sources: candidate.sources,
+    label: deriveLabel(axisScores),
+    axisScores,
+    axisSum: axisSum(axisScores),
+    rationale: entry?.rationale ?? "Not judged by the model.",
+  };
+  if (candidate.stars !== undefined) result.stars = candidate.stars;
+  if (candidate.language) result.language = candidate.language;
+  if (candidate.lastActivity) result.lastActivity = candidate.lastActivity;
+  if (candidate.archived !== undefined) result.archived = candidate.archived;
+  if (candidate.verification) result.verifiedAt = candidate.verification.checkedAt;
+  return result;
+}
+
 function assemble(candidates: readonly Candidate[], output: SynthesisOutput): SynthesisResult {
   const byId = new Map(output.candidates.map((entry) => [entry.candidateId, entry]));
 
-  const judged: ReportCandidate[] = candidates.map((candidate) => {
-    const entry = byId.get(candidate.id);
-    const axisScores = entry?.axisScores ?? {
-      coreFunction: 0,
-      targetAudience: 0,
-      scope: 0,
-      approach: 0,
-      activity: 0,
-    };
-    const result: ReportCandidate = {
-      id: candidate.id,
-      name: candidate.name,
-      url: candidate.url,
-      description: candidate.description,
-      sources: candidate.sources,
-      label: deriveLabel(axisScores),
-      axisScores,
-      axisSum: axisSum(axisScores),
-      rationale: entry?.rationale ?? "Not judged by the model.",
-    };
-    if (candidate.stars !== undefined) result.stars = candidate.stars;
-    if (candidate.language) result.language = candidate.language;
-    if (candidate.lastActivity) result.lastActivity = candidate.lastActivity;
-    if (candidate.archived !== undefined) result.archived = candidate.archived;
-    if (candidate.verification) result.verifiedAt = candidate.verification.checkedAt;
-    return result;
-  });
-
   return {
     summary: output.summary,
-    candidates: judged,
+    candidates: candidates.map((candidate) => toReportCandidate(candidate, byId.get(candidate.id))),
     yourAngle: {
       summary: output.yourAngle.summary,
       missingFeatures: output.yourAngle.missingFeatures,

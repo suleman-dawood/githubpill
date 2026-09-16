@@ -74,6 +74,27 @@ function tryParse(text: string): unknown | undefined {
   }
 }
 
+/** Slice a brace-balanced object from `start`, ignoring braces inside strings. */
+function balancedObject(text: string, start: number): string | undefined {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i] as string;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+    } else if (char === '"') inString = true;
+    else if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return undefined;
+}
+
 /**
  * Pull the first JSON object out of text that may include ANSI codes, prose, or
  * a fenced code block — agentic CLIs do not guarantee bare JSON on stdout.
@@ -90,26 +111,9 @@ export function extractJson(text: string, provider: ProviderId): unknown {
 
   const start = cleaned.indexOf("{");
   if (start >= 0) {
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-    for (let i = start; i < cleaned.length; i += 1) {
-      const char = cleaned[i] as string;
-      if (inString) {
-        if (escaped) escaped = false;
-        else if (char === "\\") escaped = true;
-        else if (char === '"') inString = false;
-      } else if (char === '"') inString = true;
-      else if (char === "{") depth += 1;
-      else if (char === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          const parsed = tryParse(cleaned.slice(start, i + 1));
-          if (parsed !== undefined) return parsed;
-          break;
-        }
-      }
-    }
+    const candidate = balancedObject(cleaned, start);
+    const parsed = candidate === undefined ? undefined : tryParse(candidate);
+    if (parsed !== undefined) return parsed;
   }
 
   throw new StructuredOutputError("no JSON object found in the response", provider);

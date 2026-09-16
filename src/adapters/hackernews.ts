@@ -1,7 +1,6 @@
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
+import { verification, verificationFromError, type SearchOptions, type SourceAdapter } from "./types.js";
 import { getJson } from "./http.js";
-import { HttpError } from "../errors.js";
 
 const API = "https://hn.algolia.com/api/v1";
 
@@ -52,12 +51,9 @@ export class HackerNewsAdapter implements SourceAdapter {
         timeoutMs: options.config.requestTimeoutMs,
         retries: 1,
       });
-      return verification(Boolean(response?.id), 200, itemUrl(candidate.id));
+      return verification(Boolean(response.id), 200, itemUrl(candidate.id));
     } catch (error) {
-      if (error instanceof HttpError) {
-        return verification(false, error.status, undefined, error.message);
-      }
-      return verification(false, null, undefined, (error as Error).message);
+      return verificationFromError(error);
     }
   }
 }

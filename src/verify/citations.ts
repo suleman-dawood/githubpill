@@ -17,6 +17,24 @@ export interface VerifyResult {
 /** Statuses that mean the artifact is gone, as opposed to "could not check". */
 const GONE_STATUSES = new Set([404, 410]);
 
+/** The first source of this candidate that has a matching adapter. */
+function adapterFor(
+  candidate: Candidate,
+  bySource: Map<SourceId, SourceAdapter>,
+): SourceAdapter | undefined {
+  for (const source of candidate.sources) {
+    const adapter = bySource.get(source);
+    if (adapter) return adapter;
+  }
+  return undefined;
+}
+
+/** True when the source definitively reports the candidate as gone (404/410). */
+function isGone(candidate: Candidate): boolean {
+  const status = candidate.verification?.status ?? null;
+  return status !== null && GONE_STATUSES.has(status);
+}
+
 /**
  * Confirm candidates still exist at their source.
  *
@@ -35,7 +53,7 @@ export async function verifyCandidates(
   const bySource = new Map<SourceId, SourceAdapter>(adapters.map((adapter) => [adapter.id, adapter]));
 
   const results = await mapLimit(candidates, config.concurrency, async (candidate) => {
-    const adapter = candidate.sources.map((source) => bySource.get(source)).find(Boolean);
+    const adapter = adapterFor(candidate, bySource);
     if (!adapter) return { candidate, ok: true, checked: false };
 
     const verification = await adapter.verify(candidate, {
@@ -54,10 +72,7 @@ export async function verifyCandidates(
   for (const result of results) {
     if (!result.checked || result.ok) {
       kept.push(result.candidate);
-      continue;
-    }
-    const status = result.candidate.verification?.status ?? null;
-    if (status !== null && GONE_STATUSES.has(status)) {
+    } else if (isGone(result.candidate)) {
       dropped.push(result.candidate);
     } else {
       unverified.push(result.candidate);

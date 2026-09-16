@@ -22,6 +22,7 @@ interface RequestSpec {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
+const BASE_BACKOFF_MS = 500;
 
 function isRetryable(status: number, body: string): boolean {
   if (status === 429 || status >= 500) return true;
@@ -29,10 +30,14 @@ function isRetryable(status: number, body: string): boolean {
   return status === 403 && /rate limit|secondary rate/i.test(body);
 }
 
+function baseBackoffMs(attempt: number): number {
+  return BASE_BACKOFF_MS * 2 ** attempt;
+}
+
 function backoffMs(attempt: number, headers: Headers): number {
   const retryAfter = Number(headers.get("retry-after"));
   if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
-  return 500 * 2 ** attempt;
+  return baseBackoffMs(attempt);
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -55,7 +60,7 @@ async function request(url: string, spec: RequestSpec, options: HttpOptions): Pr
       });
     } catch (error) {
       if (attempt < retries) {
-        await sleep(500 * 2 ** attempt);
+        await sleep(baseBackoffMs(attempt));
         continue;
       }
       throw new HttpError(`request failed: ${(error as Error).message}`, null, url);
