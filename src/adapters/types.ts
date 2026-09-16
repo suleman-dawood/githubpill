@@ -1,5 +1,6 @@
-import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
+import type { Candidate, QueryPlan, RawHit, SourceId, Verification } from "../types.js";
 import type { Config } from "../config.js";
+import { HttpError } from "../errors.js";
 
 export interface SearchOptions {
   limit: number;
@@ -20,7 +21,10 @@ export interface SourceAdapter {
 }
 
 /** Build the ordered, de-duplicated list of queries an adapter should run. */
-export function queriesFor(plan: { keywords: string[]; productNames: string[]; topics: string[] }, max: number): string[] {
+export function queriesFor(
+  plan: Pick<QueryPlan, "keywords" | "productNames" | "topics">,
+  max: number,
+): string[] {
   const queries = [
     ...plan.keywords,
     ...plan.productNames,
@@ -39,4 +43,12 @@ export function verification(
   if (finalUrl) result.finalUrl = finalUrl;
   if (error) result.error = error;
   return result;
+}
+
+/** Turn a failed `verify` call into a `Verification`, preserving the HTTP status. */
+export function verificationFromError(error: unknown): Verification {
+  if (error instanceof HttpError) {
+    return verification(false, error.status, undefined, error.message);
+  }
+  return verification(false, null, undefined, error instanceof Error ? error.message : String(error));
 }

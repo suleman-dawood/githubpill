@@ -10,6 +10,10 @@ export function corePair(scores: AxisScores): number {
   return scores.coreFunction + scores.targetAudience;
 }
 
+/** Thresholds that separate the three labels (core pair, then total). */
+const LIKELY_MATCH = { corePair: 5, sum: 11 } as const;
+const WORTH_INSPECTING = { corePair: 4, sum: 8 } as const;
+
 /**
  * Derive the match label mechanically from axis scores. The LLM never emits a
  * label — two runs with identical scores always produce identical verdicts.
@@ -17,8 +21,8 @@ export function corePair(scores: AxisScores): number {
 export function deriveLabel(scores: AxisScores): MatchLabel {
   const sum = axisSum(scores);
   const pair = corePair(scores);
-  if (pair >= 5 && sum >= 11) return "LIKELY_MATCH";
-  if (pair >= 4 && sum >= 8) return "WORTH_INSPECTING";
+  if (pair >= LIKELY_MATCH.corePair && sum >= LIKELY_MATCH.sum) return "LIKELY_MATCH";
+  if (pair >= WORTH_INSPECTING.corePair && sum >= WORTH_INSPECTING.sum) return "WORTH_INSPECTING";
   return "UNRELATED";
 }
 
@@ -33,13 +37,16 @@ export function capWithoutEvidence(label: MatchLabel): MatchLabel {
   return label === "LIKELY_MATCH" ? "WORTH_INSPECTING" : label;
 }
 
+function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
+}
+
 export function headlineFor(band: VerdictBand, count: number): string {
-  const plural = count === 1 ? "" : "s";
   switch (band) {
     case "red":
-      return `This already exists — ${count} strong match${count === 1 ? "" : "es"} found`;
+      return `This already exists — ${count} ${pluralize(count, "strong match", "strong matches")} found`;
     case "yellow":
-      return `Some overlap — worth a closer look at ${count} candidate${plural}`;
+      return `Some overlap — worth a closer look at ${count} ${pluralize(count, "candidate", "candidates")}`;
     case "green":
       return "No close match found — your idea looks novel";
   }

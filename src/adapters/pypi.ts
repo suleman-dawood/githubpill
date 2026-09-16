@@ -1,7 +1,7 @@
+import * as cheerio from "cheerio";
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
+import { verification, verificationFromError, type SearchOptions, type SourceAdapter } from "./types.js";
 import { httpGet } from "./http.js";
-import { HttpError } from "../errors.js";
 
 const API = "https://pypi.org";
 
@@ -11,15 +11,18 @@ const API = "https://pypi.org";
  * markup, only that function needs updating.
  */
 export function parseSnippets(html: string): Array<{ name: string; description: string }> {
+  const $ = cheerio.load(html);
   const results: Array<{ name: string; description: string }> = [];
-  const blocks = html.matchAll(/<a[^>]*class="[^"]*package-snippet[^"]*"[^>]*href="\/project\/([^/"]+)\/"[^>]*>([\s\S]*?)<\/a>/g);
-  for (const block of blocks) {
-    const fallbackName = block[1] ?? "";
-    const inner = block[2] ?? "";
-    const name = inner.match(/package-snippet__name[^>]*>([^<]+)</)?.[1]?.trim() ?? fallbackName;
-    const description = inner.match(/package-snippet__description[^>]*>([^<]*)</)?.[1]?.trim() ?? "";
+
+  $("a.package-snippet").each((_, element) => {
+    const anchor = $(element);
+    const fromMarkup = anchor.find(".package-snippet__name").text().trim();
+    const fromHref = anchor.attr("href")?.match(/\/project\/([^/]+)\//)?.[1] ?? "";
+    const name = fromMarkup || fromHref;
+    const description = anchor.find(".package-snippet__description").text().trim();
     if (name) results.push({ name, description });
-  }
+  });
+
   return results;
 }
 
@@ -57,10 +60,7 @@ export class PyPiAdapter implements SourceAdapter {
       });
       return verification(response.ok, response.status, response.finalUrl);
     } catch (error) {
-      if (error instanceof HttpError) {
-        return verification(false, error.status, undefined, error.message);
-      }
-      return verification(false, null, undefined, (error as Error).message);
+      return verificationFromError(error);
     }
   }
 }

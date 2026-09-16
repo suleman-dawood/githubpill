@@ -1,6 +1,6 @@
-import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
+import { execa } from "execa";
 import { ConfigError, ProviderError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
 import {
@@ -60,22 +60,22 @@ export function resolveHost(agent?: string): HostCommand {
   return found;
 }
 
-export const execHost: HostRunner = (command, args, timeoutMs) =>
-  new Promise((resolve, reject) => {
-    execFile(
-      command,
-      [...args],
-      { timeout: timeoutMs, maxBuffer: 20 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          const detail = (stderr || error.message).trim().slice(0, 300);
-          reject(new ProviderError(`host agent failed: ${detail}`, "host"));
-          return;
-        }
-        resolve(stdout);
-      },
-    );
-  });
+export const execHost: HostRunner = async (command, args, timeoutMs) => {
+  try {
+    const { stdout } = await execa(command, [...args], {
+      timeout: timeoutMs,
+      maxBuffer: 20 * 1024 * 1024,
+      // Agentic CLIs read stdin when it is a pipe; close it so they run the
+      // prompt argument instead of waiting for input that never arrives.
+      stdin: "ignore",
+    });
+    return stdout;
+  } catch (error) {
+    const stderr = (error as { stderr?: string }).stderr ?? "";
+    const detail = (stderr || (error as Error).message).trim().slice(0, 300);
+    throw new ProviderError(`host agent failed: ${detail}`, "host");
+  }
+};
 
 /**
  * Uses the host agentic CLI as the LLM, so no API key is required. The agent

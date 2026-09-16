@@ -1,7 +1,6 @@
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
+import { verification, verificationFromError, type SearchOptions, type SourceAdapter } from "./types.js";
 import { getJson, httpGet } from "./http.js";
-import { HttpError } from "../errors.js";
 
 const API = "https://registry.npmjs.org";
 
@@ -27,16 +26,16 @@ export class NpmAdapter implements SourceAdapter {
       timeoutMs: options.config.requestTimeoutMs,
       ...(options.signal ? { signal: options.signal } : {}),
     });
-    return (data.objects ?? []).map((object, rank): RawHit => {
+    return (data.objects ?? []).map((entry, rank): RawHit => {
       const hit: RawHit = {
         source: this.id,
-        id: object.package.name,
-        name: object.package.name,
-        url: object.package.links?.npm ?? `https://www.npmjs.com/package/${object.package.name}`,
-        description: object.package.description ?? "",
+        id: entry.package.name,
+        name: entry.package.name,
+        url: entry.package.links?.npm ?? `https://www.npmjs.com/package/${entry.package.name}`,
+        description: entry.package.description ?? "",
         rank,
       };
-      if (object.package.date) hit.lastActivity = object.package.date;
+      if (entry.package.date) hit.lastActivity = entry.package.date;
       return hit;
     });
   }
@@ -50,10 +49,7 @@ export class NpmAdapter implements SourceAdapter {
       });
       return verification(response.ok, response.status, response.finalUrl);
     } catch (error) {
-      if (error instanceof HttpError) {
-        return verification(false, error.status, undefined, error.message);
-      }
-      return verification(false, null, undefined, (error as Error).message);
+      return verificationFromError(error);
     }
   }
 }

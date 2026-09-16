@@ -1,23 +1,11 @@
 import type { Candidate, RawHit, SourceId, Verification } from "../types.js";
-import { verification, type SearchOptions, type SourceAdapter } from "./types.js";
+import { verification, verificationFromError, type SearchOptions, type SourceAdapter } from "./types.js";
 import { getJson } from "./http.js";
-import { HttpError } from "../errors.js";
 
 const API = "https://api.github.com";
 
-interface SearchResponse {
-  items?: Array<{
-    full_name: string;
-    html_url: string;
-    description: string | null;
-    stargazers_count: number;
-    language: string | null;
-    pushed_at: string | null;
-    archived: boolean;
-  }>;
-}
-
-interface RepoResponse {
+/** The subset of a GitHub repository the adapter reads. */
+interface Repo {
   full_name: string;
   html_url: string;
   description: string | null;
@@ -25,6 +13,10 @@ interface RepoResponse {
   language: string | null;
   pushed_at: string | null;
   archived: boolean;
+}
+
+interface SearchResponse {
+  items?: Repo[];
 }
 
 function headers(token?: string): Record<string, string> {
@@ -41,7 +33,7 @@ function toQuery(query: string): string {
   return query.startsWith("topic:") ? query : `${query} in:name,description`;
 }
 
-function toHit(item: NonNullable<SearchResponse["items"]>[number], source: SourceId, rank: number): RawHit {
+function toHit(item: Repo, source: SourceId, rank: number): RawHit {
   const hit: RawHit = {
     source,
     id: item.full_name,
@@ -74,17 +66,14 @@ export class GitHubAdapter implements SourceAdapter {
   async verify(candidate: Candidate, options: SearchOptions): Promise<Verification> {
     const url = `${API}/repos/${candidate.id}`;
     try {
-      const data = await getJson<RepoResponse>(url, {
+      const data = await getJson<Repo>(url, {
         headers: headers(options.config.githubToken),
         timeoutMs: options.config.requestTimeoutMs,
         retries: 1,
       });
       return verification(true, 200, data.html_url);
     } catch (error) {
-      if (error instanceof HttpError) {
-        return verification(false, error.status, undefined, error.message);
-      }
-      return verification(false, null, undefined, (error as Error).message);
+      return verificationFromError(error);
     }
   }
 }

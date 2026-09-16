@@ -74,38 +74,48 @@ export function extractProductNames(text: string, preservedTerms: string[]): str
   return unique(names).slice(0, 4);
 }
 
-/** Content-word phrases: preserved compounds, a short full phrase, then bigrams. */
-export function extractKeywordPhrases(text: string, preservedTerms: string[]): string[] {
+/** Score tiers for keyword phrases; higher scores rank earlier. */
+const PHRASE_SCORES = {
+  compound: 4,
+  fullPhrase: 3,
+  onTopicBigram: 3,
+  bigram: 2,
+} as const;
+
+/** Lowercased content words: no stopwords, no one/two-letter words, no repeats. */
+function contentWords(text: string): string[] {
   const words: string[] = [];
-  for (const word of text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, " ")
-    .split(/\s+/)) {
+  for (const word of text.toLowerCase().replace(/[^a-z0-9\s-]/g, " ").split(/\s+/)) {
     if (word.length > 2 && !STOPWORDS.has(word) && words.at(-1) !== word) words.push(word);
   }
+  return words;
+}
 
+/** Content-word phrases: preserved compounds, a short full phrase, then bigrams. */
+export function extractKeywordPhrases(text: string, preservedTerms: string[]): string[] {
+  const words = contentWords(text);
   const preserved = new Set(preservedTerms.map((term) => term.toLowerCase()));
-  const phrases: Array<{ phrase: string; score: number; index: number }> = [];
-  let index = 0;
+  const phrases: Array<{ phrase: string; score: number }> = [];
 
   for (const term of preservedTerms) {
     if (term.includes(" ") || term.includes("-")) {
-      phrases.push({ phrase: term, score: 4, index: index++ });
+      phrases.push({ phrase: term, score: PHRASE_SCORES.compound });
     }
   }
   if (words.length >= 2 && words.length <= 4) {
-    phrases.push({ phrase: words.join(" "), score: 3, index: index++ });
+    phrases.push({ phrase: words.join(" "), score: PHRASE_SCORES.fullPhrase });
   }
   for (let i = 0; i + 1 < words.length; i += 1) {
-    const pair = `${words[i]} ${words[i + 1]}`;
     const onTopic = preserved.has(words[i] ?? "") || preserved.has(words[i + 1] ?? "");
-    phrases.push({ phrase: pair, score: onTopic ? 3 : 2, index: index++ });
+    phrases.push({
+      phrase: `${words[i]} ${words[i + 1]}`,
+      score: onTopic ? PHRASE_SCORES.onTopicBigram : PHRASE_SCORES.bigram,
+    });
   }
 
-  const ranked = phrases
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map((entry) => entry.phrase);
-
+  // `sort` is stable, so equal scores keep insertion order (compounds, then the
+  // full phrase, then bigrams in reading order).
+  const ranked = phrases.sort((a, b) => b.score - a.score).map((entry) => entry.phrase);
   return unique(ranked).slice(0, 3);
 }
 

@@ -35,17 +35,20 @@ export async function fanout(
   const runs: SourceRun[] = [];
   const errors: AdapterError[] = [];
 
+  const recordRun = (source: SourceId, query: string, count: number): void => {
+    runs.push({ source, query, hits: count });
+    onProgress?.({ type: "search", source, query, hits: count });
+  };
+
   await mapLimit(jobs, config.concurrency, async ({ adapter, query }) => {
+    const searchOptions = { limit: config.perSourceLimit, config, ...(signal ? { signal } : {}) };
     try {
-      const searchOptions = { limit: config.perSourceLimit, config, ...(signal ? { signal } : {}) };
       const results = await adapter.search(query, searchOptions);
       for (const hit of results) hits.push({ ...hit, query });
-      runs.push({ source: adapter.id, query, hits: results.length });
-      onProgress?.({ type: "search", source: adapter.id, query, hits: results.length });
+      recordRun(adapter.id, query, results.length);
     } catch (error) {
       errors.push({ source: adapter.id, query, message: (error as Error).message });
-      runs.push({ source: adapter.id, query, hits: 0 });
-      onProgress?.({ type: "search", source: adapter.id, query, hits: 0 });
+      recordRun(adapter.id, query, 0);
     }
   });
 

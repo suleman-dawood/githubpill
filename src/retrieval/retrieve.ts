@@ -33,6 +33,13 @@ export interface Retrieval {
   citationsAlive: number;
 }
 
+/** Pick the query plan: an explicit one wins, then the LLM, then the heuristic. */
+async function resolvePlan(options: RetrieveOptions, config: Config): Promise<QueryPlan> {
+  if (options.plan) return options.plan;
+  if (options.llm && config.llmQueries) return planQueriesWithLlm(options.idea, options.llm);
+  return planQueries(options.idea);
+}
+
 /** The shared front half of every mode: plan, search, rank, verify. */
 export async function retrieve(options: RetrieveOptions): Promise<Retrieval> {
   const { config } = options;
@@ -40,11 +47,7 @@ export async function retrieve(options: RetrieveOptions): Promise<Retrieval> {
   const progress = options.onProgress;
 
   progress?.({ type: "stage", stage: "plan" });
-  const plan =
-    options.plan ??
-    (options.llm && config.llmQueries
-      ? await planQueriesWithLlm(options.idea, options.llm)
-      : planQueries(options.idea));
+  const plan = await resolvePlan(options, config);
 
   progress?.({ type: "stage", stage: "search" });
   const { hits, runs, errors } = await fanout(adapters, plan, config, progress, options.signal);

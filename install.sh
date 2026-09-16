@@ -1,45 +1,27 @@
 #!/usr/bin/env bash
-# install.sh — install the GithubPill skill into every agentic CLI on this machine.
 #
-# The skill follows the Agent Skills standard, so the same directory works in
-# any host that reads skills/<name>/SKILL.md. This script symlinks it into the
-# locations each host discovers.
+# install.sh — install the GithubPill skill into agentic CLIs on this machine.
 #
-# Usage:
-#   bash install.sh                 # detected CLIs, user-level scope
-#   bash install.sh --project       # this repo's agent configs + .agents/skills
-#   bash install.sh --all           # every known target, both scopes
-#   bash install.sh --list          # print targets, install nothing
-#   bash install.sh --copy          # copy instead of symlink
-#   bash install.sh --target <dir>  # one explicit skills directory
+# The skill lives in skills/githubpill and follows the Agent Skills standard,
+# so the same directory works in any host that reads skills/<name>/SKILL.md.
+# This script links (or copies) it into each host's skills directory.
 #
-# The skill wraps the githubpill CLI, so the host also needs the CLI installed
-# (npm install -g githubpill) and an ANTHROPIC_API_KEY in its environment.
+# The skill drives the githubpill CLI, so the host also needs the CLI:
+#   npm install -g githubpill
+# See skills/githubpill/SKILL.md for how the skill runs.
+
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SKILL_SRC="$ROOT/skills/githubpill"
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-SCOPE="detected"
-MODE="link"
-DRY_RUN=0
-EXPLICIT_TARGET=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SKILL_SRC="$SCRIPT_DIR/skills/githubpill"
+SKILL_NAME="githubpill"
 
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --project) SCOPE="project" ;;
-    --global)  SCOPE="global" ;;
-    --all)     SCOPE="all" ;;
-    --list)    DRY_RUN=1 ;;
-    --copy)    MODE="copy" ;;
-    --target)  EXPLICIT_TARGET="${2:?--target needs a directory}"; shift ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *) echo "unknown option: $1" >&2; exit 2 ;;
-  esac
-  shift
-done
+# Each target is a "command|skills-dir|label" record:
 
-# User-level skills directories, keyed by the CLI that reads them.
 GLOBAL_TARGETS=(
   "claude|$HOME/.claude/skills|Claude Code"
   "opencode|$HOME/.config/opencode/skills|opencode"
@@ -47,7 +29,6 @@ GLOBAL_TARGETS=(
   "pi|$HOME/.pi/agent/skills|pi"
 )
 
-# Project-level skills directories.
 PROJECT_TARGETS=(
   "claude|.claude/skills|Claude Code"
   "opencode|.opencode/skills|opencode"
@@ -55,75 +36,190 @@ PROJECT_TARGETS=(
   "cursor|.cursor/skills|Cursor"
 )
 
-detected() { command -v "$1" >/dev/null 2>&1; }
+# ---------------------------------------------------------------------------
+# Options (set by parse_args)
+# ---------------------------------------------------------------------------
 
-install_one() {
-  local dir="$1" label="$2"
-  local dest="$dir/githubpill"
+SCOPE="detected"
+MODE="link"
+DRY_RUN=0
+EXPLICIT_TARGET=""
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+usage() {
+  cat <<'EOF'
+GithubPill skill installer.
+
+Usage:
+  bash install.sh                 # detected CLIs, user-level scope
+  bash install.sh --project       # this repo's agent configs + .agents/skills
+  bash install.sh --global        # user-level targets only
+  bash install.sh --all           # every known target, both scopes
+  bash install.sh --list          # print targets, install nothing
+  bash install.sh --copy          # copy instead of symlink
+  bash install.sh --target <dir>  # one explicit skills directory
+  bash install.sh -h | --help     # show this help
+EOF
+}
+
+log() {
+  printf '%s\n' "$*"
+}
+
+warn() {
+  printf '%s\n' "$*" >&2
+}
+
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Install the skill into one skills directory. Returns 1 (without exiting the
+# script) when the destination exists and is not a symlink.
+install_skill() {
+  local dir="$1"
+  local label="$2"
+  local dest="$dir/$SKILL_NAME"
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "  would install → $dest  ($label)"
+    log "  would install → $dest  ($label)"
     return 0
   fi
 
   mkdir -p "$dir"
+
+  # Never clobber a real directory; only replace a symlink we manage.
   if [ -e "$dest" ] && [ ! -L "$dest" ]; then
-    echo "  skip $dest — exists and is not a symlink (remove it first)" >&2
+    warn "  skip $dest — exists and is not a symlink (remove it first)"
     return 1
   fi
+
   rm -rf "$dest"
+
   if [ "$MODE" = "copy" ]; then
     cp -R "$SKILL_SRC" "$dest"
-    echo "  copied  → $dest  ($label)"
+    log "  copied  → $dest  ($label)"
   else
     ln -s "$SKILL_SRC" "$dest"
-    echo "  linked  → $dest  ($label)"
+    log "  linked  → $dest  ($label)"
   fi
 }
 
-if [ -n "$EXPLICIT_TARGET" ]; then
-  install_one "$EXPLICIT_TARGET" "explicit target"
-  echo ""
-  echo "Done. Restart the host CLI so it discovers the skill."
-  exit 0
-fi
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
 
-echo "GithubPill installer — source: $SKILL_SRC"
-echo ""
+parse_args() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --project) SCOPE="project" ;;
+      --global)  SCOPE="global" ;;
+      --all)     SCOPE="all" ;;
+      --list)    DRY_RUN=1 ;;
+      --copy)    MODE="copy" ;;
+      --target)
+        EXPLICIT_TARGET="${2:-}"
+        if [ -z "$EXPLICIT_TARGET" ]; then
+          warn "error: --target needs a directory"
+          exit 2
+        fi
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        warn "error: unknown option: $1"
+        usage >&2
+        exit 2
+        ;;
+    esac
+    shift
+  done
+}
 
-installed=0
+# ---------------------------------------------------------------------------
+# Target selection
+# ---------------------------------------------------------------------------
 
-if [ "$SCOPE" = "project" ] || [ "$SCOPE" = "all" ]; then
-  echo "Project scope:"
+INSTALLED=0
+
+# Project targets: always include the portable .agents path; otherwise only
+# where the host already has a project config directory in this repo.
+install_project_targets() {
+  local scope="$1"
+  local entry command dir label
+
   for entry in "${PROJECT_TARGETS[@]}"; do
-    IFS='|' read -r bin dir label <<<"$entry"
-    # Always take the portable .agents path; otherwise only where the host
-    # already has a project config directory.
-    if [ "$SCOPE" = "all" ] || [ "$dir" = ".agents/skills" ] || [ -d "$(dirname "$dir")" ]; then
-      install_one "$dir" "$label" && installed=$((installed + 1))
+    IFS='|' read -r command dir label <<<"$entry"
+
+    if [ "$scope" = "all" ] || [ "$dir" = ".agents/skills" ] || [ -d "$(dirname "$dir")" ]; then
+      if install_skill "$dir" "$label"; then
+        INSTALLED=$((INSTALLED + 1))
+      fi
     fi
   done
-  echo ""
-fi
+}
 
-if [ "$SCOPE" = "global" ] || [ "$SCOPE" = "all" ] || [ "$SCOPE" = "detected" ]; then
-  echo "User scope:"
+# Global targets: install where the CLI is on PATH or its config dir exists.
+install_global_targets() {
+  local scope="$1"
+  local entry command dir label
+
   for entry in "${GLOBAL_TARGETS[@]}"; do
-    IFS='|' read -r bin dir label <<<"$entry"
-    if [ "$SCOPE" = "all" ] || detected "$bin" || [ -d "$(dirname "$dir")" ]; then
-      install_one "$dir" "$label" && installed=$((installed + 1))
+    IFS='|' read -r command dir label <<<"$entry"
+
+    if [ "$scope" = "all" ] || command_exists "$command" || [ -d "$(dirname "$dir")" ]; then
+      if install_skill "$dir" "$label"; then
+        INSTALLED=$((INSTALLED + 1))
+      fi
     fi
   done
-  echo ""
-fi
+}
 
-if [ "$DRY_RUN" -eq 0 ] && [ "$installed" -eq 0 ]; then
-  echo "No agentic CLI detected. Install the skill manually with:" >&2
-  echo "  bash install.sh --target <your-cli-skills-dir>" >&2
-  exit 1
-fi
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
-if [ "$DRY_RUN" -eq 0 ]; then
-  echo "Done. Restart the host CLI so it discovers the skill."
-  echo "Invoke it by describing an idea, or via the host's skill command."
-fi
+main() {
+  parse_args "$@"
+
+  if [ -n "$EXPLICIT_TARGET" ]; then
+    install_skill "$EXPLICIT_TARGET" "explicit target"
+    log ""
+    log "Done. Restart the host CLI so it discovers the skill."
+    return 0
+  fi
+
+  log "GithubPill installer — source: $SKILL_SRC"
+  log ""
+
+  if [ "$SCOPE" = "project" ] || [ "$SCOPE" = "all" ]; then
+    log "Project scope:"
+    install_project_targets "$SCOPE"
+    log ""
+  fi
+
+  if [ "$SCOPE" = "global" ] || [ "$SCOPE" = "all" ] || [ "$SCOPE" = "detected" ]; then
+    log "User scope:"
+    install_global_targets "$SCOPE"
+    log ""
+  fi
+
+  if [ "$DRY_RUN" -eq 0 ] && [ "$INSTALLED" -eq 0 ]; then
+    warn "No agentic CLI detected. Install the skill manually with:"
+    warn "  bash install.sh --target <your-cli-skills-dir>"
+    return 1
+  fi
+
+  if [ "$DRY_RUN" -eq 0 ]; then
+    log "Done. Restart the host CLI so it discovers the skill."
+    log "Invoke it by describing an idea, or via the host's skill command."
+  fi
+}
+
+main "$@"

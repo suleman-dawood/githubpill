@@ -1,3 +1,6 @@
+import { setTimeout as sleep } from "node:timers/promises";
+import pLimit from "p-limit";
+import pRetry from "p-retry";
 import { HttpError } from "../errors.js";
 
 export interface HttpOptions {
@@ -22,58 +25,79 @@ interface RequestSpec {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const DEFAULT_RETRIES = 2;
+const BASE_BACKOFF_MS = 500;
 
-function isRetryable(status: number, body: string): boolean {
+function isRetryableStatus(status: number, body: string): boolean {
   if (status === 429 || status >= 500) return true;
   // GitHub signals secondary limits with a 403 and an explanatory body.
   return status === 403 && /rate limit|secondary rate/i.test(body);
 }
 
-function backoffMs(attempt: number, headers: Headers): number {
-  const retryAfter = Number(headers.get("retry-after"));
-  if (Number.isFinite(retryAfter) && retryAfter > 0) return retryAfter * 1000;
-  return 500 * 2 ** attempt;
+function baseBackoffMs(attempt: number): number {
+  return BASE_BACKOFF_MS * 2 ** attempt;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/** Seconds from a `Retry-After` header, if it is present and valid. */
+function retryAfterMs(headers: Headers): number | undefined {
+  const seconds = Number(headers.get("retry-after"));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : undefined;
+}
+
+/** Signals that an otherwise-complete response should be retried. */
+class RetryableResponse extends Error {
+  constructor(readonly response: HttpResponse) {
+    super(`retryable HTTP ${response.status}`);
+  }
+}
+
+async function attempt(
+  url: string,
+  spec: RequestSpec,
+  options: HttpOptions,
+  timeoutMs: number,
+): Promise<HttpResponse> {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
+
+  const response = await fetch(url, {
+    method: spec.method,
+    headers: options.headers,
+    signal,
+    ...(spec.body === undefined ? {} : { body: spec.body }),
+  });
+
+  const text = await response.text();
+  const result: HttpResponse = {
+    status: response.status,
+    ok: response.ok,
+    text,
+    finalUrl: response.url || url,
+    headers: response.headers,
+  };
+  if (!response.ok && isRetryableStatus(response.status, text)) throw new RetryableResponse(result);
+  return result;
+}
 
 async function request(url: string, spec: RequestSpec, options: HttpOptions): Promise<HttpResponse> {
   const retries = options.retries ?? DEFAULT_RETRIES;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  for (let attempt = 0; ; attempt += 1) {
-    const timeout = AbortSignal.timeout(timeoutMs);
-    const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout;
-
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        method: spec.method,
-        headers: options.headers,
-        signal,
-        ...(spec.body === undefined ? {} : { body: spec.body }),
-      });
-    } catch (error) {
-      if (attempt < retries) {
-        await sleep(500 * 2 ** attempt);
-        continue;
-      }
-      throw new HttpError(`request failed: ${(error as Error).message}`, null, url);
-    }
-
-    const text = await response.text();
-    if (!response.ok && isRetryable(response.status, text) && attempt < retries) {
-      await sleep(backoffMs(attempt, response.headers));
-      continue;
-    }
-
-    return {
-      status: response.status,
-      ok: response.ok,
-      text,
-      finalUrl: response.url || url,
-      headers: response.headers,
-    };
+  try {
+    return await pRetry(() => attempt(url, spec, options, timeoutMs), {
+      retries,
+      minTimeout: 0,
+      factor: 1,
+      shouldRetry: () => true,
+      onFailedAttempt: async (error) => {
+        if (error.retriesLeft <= 0) return;
+        const after = error instanceof RetryableResponse ? retryAfterMs(error.response.headers) : undefined;
+        await sleep(after ?? baseBackoffMs(error.attemptNumber - 1));
+      },
+    });
+  } catch (error) {
+    // Retries exhausted: surface the last response, or wrap a transport failure.
+    if (error instanceof RetryableResponse) return error.response;
+    throw new HttpError(`request failed: ${(error as Error).message}`, null, url);
   }
 }
 
@@ -106,22 +130,10 @@ export async function getJson<T>(url: string, options: HttpOptions = {}): Promis
 }
 
 /** Run async work over items with a bounded number of in-flight tasks. */
-export async function mapLimit<T, R>(
+export function mapLimit<T, R>(
   items: readonly T[],
   limit: number,
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-
-  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-    for (;;) {
-      const index = next++;
-      if (index >= items.length) return;
-      results[index] = await fn(items[index] as T, index);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
+  return pLimit(Math.max(1, limit)).map(items, (item, index) => fn(item, index));
 }
