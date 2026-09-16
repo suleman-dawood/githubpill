@@ -1,4 +1,5 @@
 import { z } from "zod";
+import pRetry from "p-retry";
 import { StructuredOutputError } from "../../errors.js";
 import type { ProviderId } from "../../types.js";
 
@@ -6,28 +7,6 @@ import type { ProviderId } from "../../types.js";
 export function toJsonSchema(schema: z.ZodType): Record<string, unknown> {
   const { $schema: _schema, ...rest } = z.toJSONSchema(schema) as Record<string, unknown>;
   return rest;
-}
-
-/**
- * OpenAI's strict structured-output mode requires every object to set
- * `additionalProperties: false` and to list all of its keys in `required`.
- */
-export function toStrictJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return makeStrict(toJsonSchema(schema)) as Record<string, unknown>;
-}
-
-function makeStrict(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(makeStrict);
-  if (node === null || typeof node !== "object") return node;
-
-  const object = { ...(node as Record<string, unknown>) };
-  for (const key of Object.keys(object)) object[key] = makeStrict(object[key]);
-
-  if (object.type === "object" && object.properties && typeof object.properties === "object") {
-    object.additionalProperties = false;
-    object.required = Object.keys(object.properties as Record<string, unknown>);
-  }
-  return object;
 }
 
 /** Validate a provider response against the requested schema. */
@@ -45,8 +24,8 @@ export function validateStructured<T>(schema: z.ZodType<T>, raw: unknown, provid
 
 /**
  * Append the JSON Schema to a prompt. Providers that cannot enforce a schema
- * (OpenAI-compatible JSON mode, Gemini JSON mime type) need the field names in
- * the prompt or the model invents its own shape.
+ * (the host CLI) need the field names in the prompt or the model invents its
+ * own shape.
  */
 export function withJsonSchemaInstruction(prompt: string, schema: z.ZodType): string {
   return [
@@ -55,15 +34,6 @@ export function withJsonSchemaInstruction(prompt: string, schema: z.ZodType): st
     "Respond with a single JSON object that matches this JSON Schema exactly:",
     JSON.stringify(toJsonSchema(schema), null, 2),
   ].join("\n");
-}
-
-/** Parse a provider's JSON text, treating malformed output as retryable. */
-export function parseStructuredText(text: string, provider: ProviderId): unknown {
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new StructuredOutputError(`provider returned invalid JSON: ${(error as Error).message}`, provider);
-  }
 }
 
 function tryParse(text: string): unknown | undefined {
@@ -124,11 +94,10 @@ export function extractJson(text: string, provider: ProviderId): unknown {
  * match the schema. A second try usually fixes malformed JSON; auth and
  * transport failures are not retried here (the HTTP layer handles those).
  */
-export async function withStructuredRetry<T>(attempt: () => Promise<T>): Promise<T> {
-  try {
-    return await attempt();
-  } catch (error) {
-    if (error instanceof StructuredOutputError) return attempt();
-    throw error;
-  }
+export function withStructuredRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  return pRetry(attempt, {
+    retries: 1,
+    minTimeout: 0,
+    shouldRetry: ({ error }) => error instanceof StructuredOutputError,
+  });
 }

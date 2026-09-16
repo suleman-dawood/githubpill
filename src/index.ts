@@ -32,13 +32,7 @@ export type { Config, LlmConfig } from "./config.js";
 export { createAdapters } from "./adapters/index.js";
 export type { SearchOptions, SourceAdapter } from "./adapters/index.js";
 
-export {
-  AnthropicClient,
-  GeminiClient,
-  HostClient,
-  OpenAICompatibleClient,
-  createLLMClient,
-} from "./synthesis/providers/index.js";
+export { AiSdkClient, HostClient, createLLMClient } from "./synthesis/providers/index.js";
 export type { LLMClient, ProviderOptions, StructuredRequest } from "./synthesis/providers/index.js";
 
 export { planQueries } from "./retrieval/query-plan.js";

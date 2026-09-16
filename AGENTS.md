@@ -19,7 +19,7 @@ core is a TypeScript CLI/service; the Agent Skills skill in
 | `src/adapters/` | Source adapters (GitHub, npm, PyPI, Hacker News) behind one interface |
 | `src/retrieval/` | Query planning, fan-out, dedupe, ranking, and the shared `retrieve()` step |
 | `src/synthesis/` | Prompts, Zod schemas, mechanical verdict derivation |
-| `src/synthesis/providers/` | LLM providers behind `LLMClient` (Anthropic, OpenAI, Gemini, DeepSeek) + factory |
+| `src/synthesis/providers/` | LLM providers behind `LLMClient`: API providers via the Vercel AI SDK, plus a custom `host` provider |
 | `src/deep/` | Deep mode: guarded clone, file selection, cite validation, inspection |
 | `src/verify/` | Live citation-integrity gate |
 | `src/report/` | JSON, Markdown, and HTML renderers for both modes |
@@ -55,10 +55,11 @@ through an injected `Cloner`.
   implementing `SourceAdapter` (`search` + `verify`) in `src/adapters/` and
   adding one entry to the registry in `src/adapters/index.ts`. Nothing in
   `retrieval/`, `synthesis/`, or `report/` should learn about a specific source.
-- **Providers are strategies behind `LLMClient`.** A new provider subclasses
-  `BaseLLMClient` and implements `send`; the base class owns validation and the
-  retry policy. Register it in `src/synthesis/providers/index.ts`. No
-  provider-specific branching anywhere else.
+- **Providers are strategies behind `LLMClient`.** API providers are Vercel AI
+  SDK language models wrapped by `AiSdkClient`; add one case to the factory in
+  `src/synthesis/providers/index.ts` and nothing else changes. The `host`
+  provider (`host.ts`) is custom because it drives an installed agentic CLI.
+  No provider-specific branching anywhere else.
 - **Verdict labels are derived mechanically** from axis scores in
   `src/synthesis/verdict.ts`. The LLM emits axis scores and rationale only —
   never a label, never a band. Do not move that logic into the prompt.
